@@ -54,9 +54,14 @@ bool app_submit(todo_app *a, const todo_request *req)
     return true;
 }
 
-void app_refresh_quests(todo_app *a)
+void app_want_quests(todo_app *a)
 {
-    app_submit(a, &(todo_request){TODO_REQ_REFRESH_QUESTS, 0, 0, 0, false, TODO_LINK_HOME});
+    a->quests_dirty = true;
+}
+
+void app_want_events(todo_app *a)
+{
+    a->events_dirty = true;
 }
 
 static void fail(todo_app *a, const char *text)
@@ -78,7 +83,8 @@ static void on_result(todo_app *a, const todo_result *r)
         a->link = TODO_LINK_ERROR;
         if (r->kind == TODO_REQ_SET_QUEST_DONE || r->kind == TODO_REQ_DELETE_QUEST || r->kind == TODO_REQ_DELETE_EVENT) {
             fail(a, "Could not save");
-            app_refresh_quests(a); /* the card goes back to what the server has */
+            app_want_quests(a); /* the card goes back to what the server has */
+            app_want_events(a);
         } else {
             fail(a, "Server error");
         }
@@ -87,16 +93,50 @@ static void on_result(todo_app *a, const todo_result *r)
     a->link = TODO_LINK_OK;
     a->synced_at = a->now;
     if (r->kind == TODO_REQ_POLL_CHANGES && r->changed) {
-        app_refresh_quests(a);
+        app_want_quests(a);
+        app_want_events(a);
     }
+    if (r->kind == TODO_REQ_DELETE_QUEST || r->kind == TODO_REQ_DELETE_EVENT) {
+        app_toast(a, "Deleted");
+    }
+}
+
+/* The events window: the month on screen and a week on either side (at most 45 days: the server takes 62). */
+static bool request_events(todo_app *a)
+{
+    todo_request q = todo_req(TODO_REQ_REFRESH_EVENTS);
+    int64_t from, to;
+
+    todo_month_window(a->cal_year, a->cal_month, a->off_min, &from, &to);
+    q.a = from - 7 * TODO_DAY;
+    q.b = to + 7 * TODO_DAY;
+    if (!app_submit(a, &q)) {
+        return false;
+    }
+    a->window_from = q.a;
+    a->window_to = q.b;
+    return true;
 }
 
 static void schedule(todo_app *a)
 {
     if (!a->started) {
         a->started = true;
-        app_refresh_quests(a);
+        a->quests_dirty = true;
         a->next_poll = a->ms + POLL_IDLE_MS;
+    }
+    if (a->time_valid && a->cal_year == 0) { /* the first real time: the calendar opens on today's month */
+        todo_local t;
+        todo_local_fields(a->now, a->off_min, &t);
+        a->cal_year = t.year;
+        a->cal_month = t.month;
+        a->events_dirty = true;
+    }
+    if (a->quests_dirty && app_submit(a, &(todo_request){TODO_REQ_REFRESH_QUESTS, 0, 0, 0, false, TODO_LINK_HOME})) {
+        a->quests_dirty = false;
+    }
+    if (a->events_dirty && a->cal_year != 0 && request_events(a)) {
+        a->events_dirty = false;
     }
     if (a->ms >= a->next_poll) {
         todo_request q = todo_req(TODO_REQ_POLL_CHANGES);
@@ -156,7 +196,10 @@ void todo_app_frame(todo_app *a, cydui_ui *ui)
     a->tab = (todo_tab)tab;
     if (a->tab == TODO_TAB_QUESTS) {
         screen_quests(a, ui);
+    } else if (a->tab == TODO_TAB_CALENDAR) {
+        screen_calendar(a, ui);
     }
+    overlays_frame(a, ui);
 
     todo_app_status_text(a, status, sizeof(status));
     ui_status_line(ui, a->palette, status);

@@ -63,7 +63,7 @@ typedef struct {
     todo_overlay overlay;
     todo_item_kind item_kind; /* what the detail and confirm overlays are about */
     int32_t item_id;
-    bool agenda_pending;
+    bool detail_from_agenda; /* closing the detail goes back to the agenda */
 
     /* what the status line says */
     int inflight; /* requests submitted and not yet answered */
@@ -87,6 +87,7 @@ typedef struct {
 
     /* sync */
     bool started;
+    bool quests_dirty, events_dirty; /* a refresh is wanted and not yet submitted */
     uint32_t next_poll;
     int64_t window_from, window_to; /* the events window that was asked for */
 

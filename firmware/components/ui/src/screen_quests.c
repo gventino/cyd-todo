@@ -69,8 +69,7 @@ void screen_quests(todo_app *a, cydui_ui *ui)
             toggle_quest(a, q);
         }
         if (open) {
-            a->item_kind = TODO_ITEM_QUEST;
-            a->item_id = q->id;
+            app_open_detail(a, TODO_ITEM_QUEST, q->id, false);
         }
     }
     cydui_list_end(ui);

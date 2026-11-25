@@ -128,3 +128,167 @@ void ui_toast(cydui_ui *ui, todo_palette pal, const char *text)
     cydui_draw_rect(&ui->ctx, rect_of(r.x + 2, r.y + 2, r.w - 4, r.h - 4), k->gold, 255);
     ui_text_center(ui, &todo_serif_bold_16, r, text, k->on_gold);
 }
+
+bool ui_wax_button(cydui_ui *ui, todo_palette pal, const char *label, int w, int h)
+{
+    cydui_mods m;
+    cydui_id id;
+    cydui_response rc;
+    cydui_rect r;
+
+    if (!cydui_widget_begin(ui)) {
+        return false;
+    }
+    m = cydui_take_mods(ui);
+    id = cydui_id_str(ui, label);
+    cydui_id_claim(ui, id);
+    r = cydui_alloc(ui, &m, w, h);
+    rc = cydui_interact(ui, id, r, CYDUI_SENSE_CLICK);
+    todo_paint_wax_button(&ui->ctx, pal, r, label, rc.pressed);
+    return rc.clicked;
+}
+
+static void arrow_button(cydui_ui *ui, cydui_rect r, const char *label, bool pressed)
+{
+    cydui_paint_info pi;
+
+    memset(&pi, 0, sizeof(pi));
+    pi.kind = CYDUI_WIDGET_BUTTON;
+    pi.state = pressed ? CYDUI_STATE_PRESSED : CYDUI_STATE_NORMAL;
+    pi.rect = r;
+    pi.text = label;
+    pi.text_len = strlen(label);
+    pi.text_extent = cydui_text_size(&todo_serif_16, label, pi.text_len, 0);
+    cydui_paint(ui, &pi);
+}
+
+/* "<  December 2026  >": returns -1 for the previous month, +1 for the next, 0 for neither. */
+int ui_month_header(cydui_ui *ui, todo_palette pal, int y, int m)
+{
+    const todo_colors *k = todo_colors_of(pal);
+    cydui_mods mods;
+    cydui_id id_prev, id_next;
+    cydui_rect r, prev, next;
+    cydui_response rp, rn;
+    char title[32];
+
+    if (!cydui_widget_begin(ui)) {
+        return 0;
+    }
+    mods = cydui_take_mods(ui);
+    cydui_push_id_str(ui, "month");
+    id_prev = cydui_id_str(ui, "prev");
+    id_next = cydui_id_str(ui, "next");
+    cydui_id_claim(ui, id_prev);
+    cydui_id_claim(ui, id_next);
+    r = cydui_alloc(ui, &mods, SCREEN_W, TAB_H);
+    prev = rect_of(r.x + 4, r.y + 3, 48, 26);
+    next = rect_of(r.x + r.w - 52, r.y + 3, 48, 26);
+    rp = cydui_interact(ui, id_prev, rect_of(r.x, r.y, 56, r.h), CYDUI_SENSE_CLICK);
+    rn = cydui_interact(ui, id_next, rect_of(r.x + r.w - 56, r.y, 56, r.h), CYDUI_SENSE_CLICK);
+    arrow_button(ui, prev, "<", rp.pressed);
+    arrow_button(ui, next, ">", rn.pressed);
+    snprintf(title, sizeof(title), "%s %d", todo_month_name(m), y);
+    ui_text_center(ui, &todo_serif_bold_16, r, title, k->text);
+    cydui_pop_id(ui);
+    return rp.clicked ? -1 : (rn.clicked ? 1 : 0);
+}
+
+/*
+ * The month: one target over the whole grid, the cell is worked out from where the finger let go. A square at the corner
+ * of a day with an event, a ring round today, a gold block on the selected day. `tapped_day` is the day tapped (1..31),
+ * 0 for a blank cell.
+ */
+bool ui_month_grid(cydui_ui *ui, todo_palette pal, int y, int m, uint32_t event_days, int today_day, int selected_day, int *tapped_day)
+{
+    const todo_colors *k = todo_colors_of(pal);
+    const int rows = cal_rows(y, m), ch = cal_cell_h(rows);
+    cydui_mods mods;
+    cydui_id id;
+    cydui_response rc;
+    cydui_rect r;
+    int row, col, d;
+    bool tapped = false;
+    char num[4];
+
+    *tapped_day = 0;
+    if (!cydui_widget_begin(ui)) {
+        return false;
+    }
+    mods = cydui_take_mods(ui);
+    id = cydui_id_str(ui, "grid");
+    cydui_id_claim(ui, id);
+    r = cydui_alloc(ui, &mods, SCREEN_W, rows * ch);
+    r.x = (int16_t)((SCREEN_W - GRID_W) / 2);
+    rc = cydui_interact(ui, id, r, CYDUI_SENSE_CLICK);
+    if (rc.clicked && cal_cell_at(rows, ch, rc.x - r.x, rc.y - r.y, &row, &col)) {
+        *tapped_day = todo_grid_day(y, m, row, col);
+        tapped = *tapped_day != 0;
+    }
+
+    cydui_draw_rect(&ui->ctx, rect_of(r.x, r.y, GRID_W, rows * ch), k->card, 255);
+    for (row = 0; row < rows; row++) {
+        for (col = 0; col < 7; col++) {
+            cydui_rect cell = rect_of(r.x + col * GRID_CELL_W, r.y + row * ch, GRID_CELL_W, ch);
+            d = todo_grid_day(y, m, row, col);
+            if (d == 0) {
+                continue;
+            }
+            if (d == selected_day) {
+                cydui_draw_rect(&ui->ctx, rect_of(cell.x + 3, cell.y + 1, cell.w - 6, cell.h - 2), k->gold, 255);
+            }
+            if (d == today_day) { /* a ring of four thin bars */
+                cydui_rect o = rect_of(cell.x + 3, cell.y + 1, cell.w - 6, cell.h - 2);
+                cydui_draw_rect(&ui->ctx, rect_of(o.x, o.y, o.w, 2), k->gold_dark, 255);
+                cydui_draw_rect(&ui->ctx, rect_of(o.x, o.y + o.h - 2, o.w, 2), k->gold_dark, 255);
+                cydui_draw_rect(&ui->ctx, rect_of(o.x, o.y, 2, o.h), k->gold_dark, 255);
+                cydui_draw_rect(&ui->ctx, rect_of(o.x + o.w - 2, o.y, 2, o.h), k->gold_dark, 255);
+            }
+            snprintf(num, sizeof(num), "%d", d);
+            ui_text_center(ui, &todo_serif_16, cell, num, d == selected_day ? k->on_gold : k->text);
+            if (event_days & (1u << d)) {
+                cydui_draw_rect(&ui->ctx, rect_of(cell.x + cell.w - 11, cell.y + 5, 5, 5), d == selected_day ? k->on_gold : k->wax, 255);
+            }
+        }
+    }
+    return tapped;
+}
+
+/* A row of a list in a popup: a card with a title, and a line of small text below it. */
+bool ui_row_button(cydui_ui *ui, todo_palette pal, const char *title, const char *sub, bool muted)
+{
+    const todo_colors *k = todo_colors_of(pal);
+    cydui_mods mods;
+    cydui_id id;
+    cydui_rect r;
+    cydui_response rc;
+
+    if (!cydui_widget_begin(ui)) {
+        return false;
+    }
+    mods = cydui_take_mods(ui);
+    id = cydui_id_str(ui, "row");
+    cydui_id_claim(ui, id);
+    r = cydui_alloc(ui, &mods, cydui_layout_avail(ui).w, CARD_H);
+    r = rect_of(r.x, r.y + 1, r.w, CARD_H - 2);
+    rc = cydui_interact(ui, id, r, CYDUI_SENSE_CLICK);
+    todo_paint_card(&ui->ctx, pal, r, muted);
+    todo_draw_text_ellipsis(&ui->ctx, &todo_serif_16, r.x + 10, r.y + 1, r.w - 20, title, muted ? k->muted : k->text);
+    todo_draw_text_ellipsis(&ui->ctx, &todo_serif_12, r.x + 10, r.y + 19, r.w - 20, sub, k->muted);
+    return rc.clicked;
+}
+
+/* Text that wraps at the width the container has, in any font and color (the library's own label is in the theme's font). */
+void ui_wrapped(cydui_ui *ui, const cydui_font *f, cydui_color c, const char *s)
+{
+    cydui_mods m = cydui_take_mods(ui);
+    int w = cydui_layout_avail(ui).w;
+    cydui_text_extent e = cydui_text_size(f, s, CYDUI_NTS, (int16_t)w);
+    cydui_rect r;
+
+    if (!cydui_widget_begin(ui)) {
+        return;
+    }
+    r = cydui_alloc(ui, &m, w, e.h);
+    cydui_draw_text(&ui->ctx, f, r.x, r.y, (int16_t)w, CYDUI_ALIGN_LEFT, s, CYDUI_NTS, c, 255);
+}

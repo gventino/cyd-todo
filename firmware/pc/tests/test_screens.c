@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "todo/datetime.h"
 #include "todo/levels.h"
 #include "unity.h"
 #include "world.h"
@@ -257,6 +258,253 @@ static void test_the_empty_list_says_so(void)
     snap("quests_empty", TODO_PALETTE_PARCHMENT);
 }
 
+/* ---- the calendar ---- */
+
+#define TAB_QUESTS_X 53
+#define TAB_CALENDAR_X 160
+#define TAB_Y 16
+/* December 2026: the grid starts at x 2, y 78 and has 5 rows of 26 px; the 1st is a Tuesday */
+static int day_x(int d) { return 2 + ((d + 0) % 7) * 45 + 22; } /* column of day d in a month that starts on a Tuesday: (d + 0) % 7 */
+static int day_y(int d) { return 78 + ((d + 0) / 7) * 26 + 13; }
+
+static void open_calendar(todo_palette p)
+{
+    world_start(&W, p, true);
+    world_frames(&W, 6);
+    world_tap(&W, TAB_CALENDAR_X, TAB_Y);
+    world_frames(&W, 6);
+}
+
+static void test_the_calendar_tab_shows_the_month_with_dots_on_the_days_with_events(void)
+{
+    int p;
+    for (p = 0; p < TODO_PALETTE_COUNT; p++) {
+        open_calendar((todo_palette)p);
+        TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+        TEST_ASSERT_EQUAL_INT(TODO_TAB_CALENDAR, W.app.tab);
+        TEST_ASSERT_EQUAL_INT(2026, W.app.cal_year);
+        TEST_ASSERT_EQUAL_INT(12, W.app.cal_month);
+        TEST_ASSERT_EQUAL_INT(4, W.app.store.n_events);
+        {
+            int64_t from, to;
+            todo_month_window(2026, 12, WORLD_OFFSET, &from, &to);
+            TEST_ASSERT_EQUAL_INT64_MESSAGE(from - 7 * TODO_DAY, W.app.store.events_from, "a week before the month");
+            TEST_ASSERT_EQUAL_INT64_MESSAGE(to + 7 * TODO_DAY, W.app.store.events_to, "a week after it");
+        }
+        snap("calendar", (todo_palette)p);
+    }
+}
+
+static void test_the_calendar_waits_for_the_time(void)
+{
+    world_start(&W, TODO_PALETTE_PARCHMENT, true);
+    todo_app_set_time(&W.app, 0, false);
+    world_frames(&W, 4);
+    world_tap(&W, TAB_CALENDAR_X, TAB_Y);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+    TEST_ASSERT_EQUAL_INT(0, W.app.cal_year);
+    snap("calendar_waiting", TODO_PALETTE_PARCHMENT);
+    todo_app_set_time(&W.app, WORLD_NOW, true);
+    world_frames(&W, 6);
+    TEST_ASSERT_EQUAL_INT(2026, W.app.cal_year);
+    TEST_ASSERT_EQUAL_INT(4, W.app.store.n_events);
+}
+
+static void test_the_arrows_change_the_month_and_ask_for_its_events(void)
+{
+    int64_t from_dec;
+    open_calendar(TODO_PALETTE_PARCHMENT);
+    world_tap(&W, day_x(3), day_y(3));
+    world_frames(&W, 3);
+    world_tap(&W, 68, 203); /* the agenda's Close */
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_NONE, W.app.overlay);
+    TEST_ASSERT_EQUAL_INT(3, W.app.cal_day);
+    from_dec = W.app.store.events_from;
+    world_tap(&W, 292, 48);
+    world_frames(&W, 6);
+    TEST_ASSERT_EQUAL_INT(2027, W.app.cal_year);
+    TEST_ASSERT_EQUAL_INT(1, W.app.cal_month);
+    TEST_ASSERT_TRUE(W.app.store.events_from > from_dec);
+    TEST_ASSERT_EQUAL_INT(0, W.app.cal_day);
+    snap("calendar_january", TODO_PALETTE_PARCHMENT);
+    world_tap(&W, 28, 48);
+    world_tap(&W, 28, 48);
+    world_frames(&W, 6);
+    TEST_ASSERT_EQUAL_INT(2026, W.app.cal_year);
+    TEST_ASSERT_EQUAL_INT(11, W.app.cal_month);
+    TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+}
+
+static void test_a_tap_on_a_day_opens_its_agenda_and_a_blank_cell_does_nothing(void)
+{
+    open_calendar(TODO_PALETTE_PARCHMENT);
+    world_tap(&W, 10, 91); /* Monday the 30th of November: a blank */
+    world_frames(&W, 2);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_NONE, W.app.overlay);
+    world_tap(&W, day_x(3), day_y(3));
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_AGENDA, W.app.overlay);
+    TEST_ASSERT_EQUAL_INT(3, W.app.cal_day);
+    TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+    snap("agenda", TODO_PALETTE_PARCHMENT);
+}
+
+static void test_an_empty_day_says_so(void)
+{
+    open_calendar(TODO_PALETTE_PARCHMENT);
+    world_tap(&W, day_x(15), day_y(15));
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_AGENDA, W.app.overlay);
+    snap("agenda_empty", TODO_PALETTE_PARCHMENT);
+}
+
+/* ---- agenda, detail, confirm ---- */
+
+#define AGENDA_ROW0_X 160
+#define AGENDA_ROW0_Y 56
+#define DETAIL_DELETE_X 77
+#define DETAIL_CLOSE_X 190
+#define DETAIL_BUTTONS_Y 178
+#define CONFIRM_CANCEL_X 88
+#define CONFIRM_DELETE_X 201
+#define CONFIRM_BUTTONS_Y 139
+
+static void open_agenda_of_the_3rd(void)
+{
+    open_calendar(TODO_PALETTE_PARCHMENT);
+    world_tap(&W, day_x(3), day_y(3));
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_AGENDA, W.app.overlay);
+}
+
+static void test_the_whole_walk_agenda_detail_confirm_and_back(void)
+{
+    open_agenda_of_the_3rd();
+    world_tap(&W, AGENDA_ROW0_X, AGENDA_ROW0_Y);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_DETAIL, W.app.overlay);
+    TEST_ASSERT_EQUAL_INT(TODO_ITEM_EVENT, W.app.item_kind);
+    TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+    snap("detail_event", TODO_PALETTE_PARCHMENT);
+    world_tap(&W, DETAIL_DELETE_X, DETAIL_BUTTONS_Y);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_CONFIRM, W.app.overlay);
+    snap("confirm_event", TODO_PALETTE_PARCHMENT);
+    world_tap(&W, CONFIRM_CANCEL_X, CONFIRM_BUTTONS_Y);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(TODO_OV_DETAIL, W.app.overlay, "cancelling goes back to the detail");
+    TEST_ASSERT_EQUAL_INT(4, W.app.store.n_events);
+    world_tap(&W, DETAIL_CLOSE_X, DETAIL_BUTTONS_Y);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(TODO_OV_AGENDA, W.app.overlay, "closing the detail goes back to the agenda it came from");
+    world_tap(&W, 160, 10); /* outside the popup is above its top edge only if there is room: close with the button */
+    world_frames(&W, 3);
+}
+
+static void test_deleting_an_event_takes_two_taps_and_the_server_has_the_last_word(void)
+{
+    open_agenda_of_the_3rd();
+    world_tap(&W, AGENDA_ROW0_X, AGENDA_ROW0_Y);
+    world_frames(&W, 3);
+    world_tap(&W, DETAIL_DELETE_X, DETAIL_BUTTONS_Y);
+    world_frames(&W, 3);
+    world_tap(&W, CONFIRM_DELETE_X, CONFIRM_BUTTONS_Y);
+    world_frames(&W, 8);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_NONE, W.app.overlay);
+    TEST_ASSERT_EQUAL_INT(3, W.app.store.n_events);
+    TEST_ASSERT_EQUAL_INT(3, W.mem.n_events);
+    TEST_ASSERT_EQUAL_STRING("Deleted", W.app.toast);
+    TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+}
+
+static void test_a_failed_delete_keeps_the_event_and_says_so(void)
+{
+    char s[48];
+    open_agenda_of_the_3rd();
+    world_tap(&W, AGENDA_ROW0_X, AGENDA_ROW0_Y);
+    world_frames(&W, 3);
+    world_tap(&W, DETAIL_DELETE_X, DETAIL_BUTTONS_Y);
+    world_frames(&W, 3);
+    W.mem.fail_next = 1;
+    world_tap(&W, CONFIRM_DELETE_X, CONFIRM_BUTTONS_Y);
+    world_frames(&W, 8);
+    TEST_ASSERT_EQUAL_INT(4, W.mem.n_events);
+    TEST_ASSERT_EQUAL_INT(4, W.app.store.n_events);
+    todo_app_status_text(&W.app, s, sizeof(s));
+    TEST_ASSERT_EQUAL_STRING("Could not save", s);
+}
+
+static void test_the_confirm_popup_cannot_be_dismissed_by_a_tap_outside(void)
+{
+    open_agenda_of_the_3rd();
+    world_tap(&W, AGENDA_ROW0_X, AGENDA_ROW0_Y);
+    world_frames(&W, 3);
+    world_tap(&W, DETAIL_DELETE_X, DETAIL_BUTTONS_Y);
+    world_frames(&W, 3);
+    world_tap(&W, 160, 12);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_CONFIRM, W.app.overlay);
+}
+
+static void test_a_quest_title_opens_its_detail_and_delete_removes_it(void)
+{
+    int p;
+    for (p = 0; p < TODO_PALETTE_COUNT; p++) {
+        world_start(&W, (todo_palette)p, true);
+        world_frames(&W, 6);
+        world_tap(&W, TITLE_X, CARD0_Y);
+        world_frames(&W, 3);
+        TEST_ASSERT_EQUAL_INT(TODO_OV_DETAIL, W.app.overlay);
+        TEST_ASSERT_EQUAL_INT(TODO_ITEM_QUEST, W.app.item_kind);
+        TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+        snap("detail_quest", (todo_palette)p);
+    }
+    world_tap(&W, DETAIL_DELETE_X, DETAIL_BUTTONS_Y);
+    world_frames(&W, 3);
+    snap("confirm_quest", TODO_PALETTE_CANDLELIGHT);
+    world_tap(&W, CONFIRM_DELETE_X, CONFIRM_BUTTONS_Y);
+    world_frames(&W, 8);
+    TEST_ASSERT_EQUAL_INT(5, W.app.store.n_quests);
+    TEST_ASSERT_EQUAL_INT(5, W.mem.n_quests);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_NONE, W.app.overlay);
+}
+
+static void test_a_detail_whose_item_was_deleted_elsewhere_closes_by_itself(void)
+{
+    world_start(&W, TODO_PALETTE_PARCHMENT, true);
+    world_frames(&W, 6);
+    world_tap(&W, TITLE_X, CARD0_Y);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_DETAIL, W.app.overlay);
+    W.app.store.n_quests = 0; /* what a refresh after a delete on the phone looks like */
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_NONE, W.app.overlay);
+    TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+}
+
+static void test_the_longest_texts_fit_the_detail_and_scroll(void)
+{
+    char title[65], notes[257];
+    int i;
+    memset(title, 'W', 64);
+    title[64] = '\0';
+    for (i = 0; i < 256; i++) {
+        notes[i] = (char)(i % 40 == 39 ? ' ' : 'a' + i % 26);
+    }
+    notes[256] = '\0';
+    world_start(&W, TODO_PALETTE_PARCHMENT, false);
+    todo_memrepo_add_quest(&W.mem, title, notes, 5, 20261201);
+    world_frames(&W, 6);
+    world_tap(&W, TITLE_X, CARD0_Y);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_DETAIL, W.app.overlay);
+    TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+    TEST_ASSERT_TRUE(W.cmds <= 320);
+    snap("detail_longest", TODO_PALETTE_PARCHMENT);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -272,5 +520,17 @@ int main(void)
     RUN_TEST(test_forty_eight_cards_cost_what_six_cost_because_only_the_visible_ones_are_built);
     RUN_TEST(test_dragging_the_list_scrolls_it);
     RUN_TEST(test_the_empty_list_says_so);
+    RUN_TEST(test_the_calendar_tab_shows_the_month_with_dots_on_the_days_with_events);
+    RUN_TEST(test_the_calendar_waits_for_the_time);
+    RUN_TEST(test_the_arrows_change_the_month_and_ask_for_its_events);
+    RUN_TEST(test_a_tap_on_a_day_opens_its_agenda_and_a_blank_cell_does_nothing);
+    RUN_TEST(test_an_empty_day_says_so);
+    RUN_TEST(test_the_whole_walk_agenda_detail_confirm_and_back);
+    RUN_TEST(test_deleting_an_event_takes_two_taps_and_the_server_has_the_last_word);
+    RUN_TEST(test_a_failed_delete_keeps_the_event_and_says_so);
+    RUN_TEST(test_the_confirm_popup_cannot_be_dismissed_by_a_tap_outside);
+    RUN_TEST(test_a_quest_title_opens_its_detail_and_delete_removes_it);
+    RUN_TEST(test_a_detail_whose_item_was_deleted_elsewhere_closes_by_itself);
+    RUN_TEST(test_the_longest_texts_fit_the_detail_and_scroll);
     return UNITY_END();
 }
