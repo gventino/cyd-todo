@@ -114,6 +114,9 @@ void todo_app_set_ap(todo_app *a, const char *ssid, const char *password);
 /* Starts the Wi-Fi setup page (what the board does when it has no network). `reason` may be NULL or "". */
 void todo_app_enter_setup(todo_app *a, const char *ssid, const char *password, const char *reason, bool has_credentials);
 
+/* Opens the page with the QR code of a one-time link (what the New quest button does). */
+void todo_app_open_link(todo_app *a, todo_link_kind kind);
+
 /* The text of the status line, for the frame at `ms`. */
 size_t todo_app_status_text(const todo_app *a, char *buf, size_t cap);
 

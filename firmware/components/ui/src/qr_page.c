@@ -53,6 +53,11 @@ void app_open_qr(todo_app *a, todo_link_kind kind)
     }
 }
 
+void todo_app_open_link(todo_app *a, todo_link_kind kind)
+{
+    app_open_qr(a, kind);
+}
+
 static void mmss(uint32_t ms, char *out, size_t cap)
 {
     uint32_t s = ms / 1000;

@@ -10,6 +10,8 @@ set(CYDUI_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/cydui" CACHE PATH "th
 set(CYDUI_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(CYDUI_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(CYDUI_BUILD_FUZZ OFF CACHE BOOL "" FORCE)
+option(TODO_SDL "Build the window version of the program (needs SDL2)" OFF)
+set(CYDUI_BUILD_SDL ${TODO_SDL} CACHE BOOL "" FORCE)
 add_subdirectory(${CYDUI_ROOT} ${CMAKE_BINARY_DIR}/cydui)
 
 set(TODO_STRICT -std=c99 -pedantic -Wall -Wextra -Wshadow -Wcast-qual -Wconversion -Wno-sign-conversion -Werror)
@@ -87,3 +89,17 @@ set_tests_properties(qr_decode PROPERTIES SKIP_RETURN_CODE 77 DEPENDS test_qr_sh
 todo_test(test_screens todo_rig)
 todo_test(test_calendar todo_ui)
 target_include_directories(test_calendar PRIVATE ${COMP}/ui/src)
+
+# ---- the program, and the named scenes that the tests share with it ----
+add_library(todo_scenes STATIC scenes.c)
+target_link_libraries(todo_scenes PUBLIC todo_ui cydui_mem)
+target_include_directories(todo_scenes PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_options(todo_scenes PRIVATE ${TODO_STRICT})
+add_executable(todo_pc main.c)
+target_link_libraries(todo_pc PRIVATE todo_scenes)
+target_compile_options(todo_pc PRIVATE ${TODO_STRICT})
+if(TODO_SDL AND TARGET cydui_sdl)
+    target_link_libraries(todo_pc PRIVATE cydui_sdl)
+    target_compile_definitions(todo_pc PRIVATE TODO_HAVE_SDL)
+endif()
+todo_test(test_budget todo_scenes)
