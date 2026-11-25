@@ -105,3 +105,9 @@ endif()
 todo_test(test_budget todo_scenes)
 todo_test(test_runs todo_rig)
 todo_test(test_scene_goldens todo_scenes todo_rig)
+
+# ---- provisioning: the decisions of the Wi-Fi setup, pure C ----
+todo_component(provision)
+todo_test(test_prov_form todo_provision)
+todo_test(test_prov_misc todo_provision)
+todo_test(test_prov_fuzz todo_provision)

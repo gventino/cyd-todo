@@ -41,6 +41,9 @@ typedef enum {
 
 typedef enum { TODO_ITEM_QUEST, TODO_ITEM_EVENT } todo_item_kind;
 
+/* What the UI asks of the platform (the radio is not its business). */
+typedef enum { TODO_EVT_NONE = 0, TODO_EVT_SETUP_REQUESTED = 1, TODO_EVT_SETUP_CANCELLED = 2 } todo_event_kind;
+
 typedef enum { TODO_LINK_OK, TODO_LINK_OFFLINE, TODO_LINK_ERROR } todo_link_state;
 
 typedef struct {
@@ -87,6 +90,10 @@ typedef struct {
     char ssid[33], password[64], reason[48];
     bool has_credentials, setup_address;
     char wifi_name[33], server[33]; /* what Settings shows */
+    bool ap_on_demand;              /* the platform makes the access point: the setup page waits for its credentials */
+    unsigned events;                /* TODO_EVT_* bits not yet taken */
+    bool joining;                   /* the radio is trying to join join_ssid */
+    char join_ssid[33];
 
     /* sync */
     bool started;
@@ -113,6 +120,22 @@ void todo_app_set_ap(todo_app *a, const char *ssid, const char *password);
 
 /* Starts the Wi-Fi setup page (what the board does when it has no network). `reason` may be NULL or "". */
 void todo_app_enter_setup(todo_app *a, const char *ssid, const char *password, const char *reason, bool has_credentials);
+
+/* The oldest request the UI has made of the platform, or TODO_EVT_NONE. Call it each frame, after todo_app_frame. */
+todo_event_kind todo_app_take_event(todo_app *a);
+
+/*
+ * With `on_demand` the platform starts the access point when it is asked to (TODO_EVT_SETUP_REQUESTED) and hands its
+ * credentials over with todo_app_set_ap; until then the setup page says "No code". Without it (the PC) the page shows
+ * whatever todo_app_set_ap gave.
+ */
+void todo_app_set_ap_on_demand(todo_app *a, bool on_demand);
+
+/* The radio is trying to join `ssid` (the status line says so), or is not. */
+void todo_app_set_join(todo_app *a, bool joining, const char *ssid);
+
+/* The network name that Settings shows. */
+void todo_app_set_wifi_name(todo_app *a, const char *ssid);
 
 /* Opens the page with the QR code of a one-time link (what the New quest button does). */
 void todo_app_open_link(todo_app *a, todo_link_kind kind);

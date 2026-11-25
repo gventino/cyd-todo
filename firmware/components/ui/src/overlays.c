@@ -245,6 +245,7 @@ static void confirm_wifi(todo_app *a, cydui_ui *ui)
         cydui_popup_end(ui);
     }
     if (yes) {
+        app_request_setup(a);
         todo_app_enter_setup(a, NULL, NULL, "", a->has_credentials || a->wifi_name[0] != '\0');
     } else if (no || !open) {
         a->overlay = TODO_OV_NONE;

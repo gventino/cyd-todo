@@ -748,6 +748,89 @@ static void test_add_event_in_the_agenda_opens_the_event_link_page(void)
     snap("qr_event", TODO_PALETTE_CANDLELIGHT);
 }
 
+/* ---- what the UI asks of the platform, and what the platform tells it ---- */
+
+static void test_change_wifi_asks_the_platform_for_an_access_point_once(void)
+{
+    open_settings(TODO_PALETTE_PARCHMENT);
+    TEST_ASSERT_EQUAL_INT(TODO_EVT_NONE, todo_app_take_event(&W.app));
+    world_tap(&W, 160, 200);
+    world_tap(&W, CONFIRM_WIFI_CONTINUE_X, CONFIRM_WIFI_Y);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(TODO_EVT_SETUP_REQUESTED, todo_app_take_event(&W.app));
+    TEST_ASSERT_EQUAL_INT_MESSAGE(TODO_EVT_NONE, todo_app_take_event(&W.app), "an event is taken once");
+}
+
+static void test_with_a_platform_that_makes_the_access_point_the_page_waits_for_it(void)
+{
+    open_settings(TODO_PALETTE_PARCHMENT);
+    todo_app_set_ap(&W.app, "old-name", "OLDPASSWORD1");
+    todo_app_set_ap_on_demand(&W.app, true);
+    world_tap(&W, 160, 200);
+    world_tap(&W, CONFIRM_WIFI_CONTINUE_X, CONFIRM_WIFI_Y);
+    world_frames(&W, 5);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_SETUP, W.app.overlay);
+    TEST_ASSERT_EQUAL_STRING("", W.app.ssid);
+    TEST_ASSERT_EQUAL_STRING("", W.app.qr_text);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, W.app.qr.size, "no code of the old access point is shown");
+    snap("setup_waiting_for_the_access_point", TODO_PALETTE_PARCHMENT);
+    todo_app_set_ap(&W.app, "cyd-todo-4F2A", "k7Qm29xTk7Qm");
+    world_frames(&W, 5);
+    TEST_ASSERT_EQUAL_STRING("WIFI:T:WPA;S:cyd-todo-4F2A;P:k7Qm29xTk7Qm;;", W.app.qr_text);
+    TEST_ASSERT_TRUE(W.app.qr.size > 0);
+}
+
+static void test_cancelling_the_setup_tells_the_platform_and_try_again_asks_again(void)
+{
+    world_start(&W, TODO_PALETTE_PARCHMENT, true);
+    world_frames(&W, 6);
+    todo_app_enter_setup(&W.app, "cyd-todo-4F2A", "k7Qm29xT", "", true);
+    world_frames(&W, 4);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(TODO_EVT_NONE, todo_app_take_event(&W.app), "the platform's own start is not an event");
+    world_tap(&W, QR_BUTTON_X, SETUP_CANCEL_Y);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_NONE, W.app.overlay);
+    TEST_ASSERT_EQUAL_INT(TODO_EVT_SETUP_CANCELLED, todo_app_take_event(&W.app));
+    todo_app_enter_setup(&W.app, "cyd-todo-4F2A", "k7Qm29xT", "", false);
+    world_frames(&W, 4);
+    rig_advance(&W.r, 601000);
+    world_frames(&W, 3);
+    world_tap(&W, TRY_AGAIN_X, TRY_AGAIN_Y);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(TODO_EVT_SETUP_REQUESTED, todo_app_take_event(&W.app));
+}
+
+static void test_the_status_line_says_when_the_radio_is_joining_a_network(void)
+{
+    char s[48];
+    world_start(&W, TODO_PALETTE_PARCHMENT, true);
+    todo_app_set_time(&W.app, 0, false);
+    todo_app_set_join(&W.app, true, "home-net");
+    world_frames(&W, 4);
+    todo_app_status_text(&W.app, s, sizeof(s));
+    TEST_ASSERT_EQUAL_STRING("Joining home-net\xE2\x80\xA6", s);
+    snap("quests_joining", TODO_PALETTE_PARCHMENT);
+    todo_app_set_join(&W.app, false, NULL);
+    todo_app_status_text(&W.app, s, sizeof(s));
+    TEST_ASSERT_EQUAL_STRING("Waiting for time", s);
+    todo_app_set_join(&W.app, true, "a-network-name-that-is-really-long-32");
+    todo_app_status_text(&W.app, s, sizeof(s));
+    TEST_ASSERT_TRUE_MESSAGE(strlen(s) < 40, "a long name is cut in the status line");
+}
+
+static void test_settings_shows_the_network_the_platform_names(void)
+{
+    uint64_t before;
+    open_settings(TODO_PALETTE_PARCHMENT);
+    before = cydui_mem_hash(&W.r.mem);
+    todo_app_set_wifi_name(&W.app, "Cafe Wi-Fi");
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_STRING("Cafe Wi-Fi", W.app.wifi_name);
+    TEST_ASSERT_NOT_EQUAL(before, cydui_mem_hash(&W.r.mem));
+    todo_app_set_wifi_name(&W.app, NULL);
+    TEST_ASSERT_EQUAL_STRING("", W.app.wifi_name);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -789,6 +872,11 @@ int main(void)
     RUN_TEST(test_a_refused_link_says_so_and_retry_asks_again);
     RUN_TEST(test_offline_is_told_apart_on_the_link_page);
     RUN_TEST(test_add_event_in_the_agenda_opens_the_event_link_page);
+    RUN_TEST(test_change_wifi_asks_the_platform_for_an_access_point_once);
+    RUN_TEST(test_with_a_platform_that_makes_the_access_point_the_page_waits_for_it);
+    RUN_TEST(test_cancelling_the_setup_tells_the_platform_and_try_again_asks_again);
+    RUN_TEST(test_the_status_line_says_when_the_radio_is_joining_a_network);
+    RUN_TEST(test_settings_shows_the_network_the_platform_names);
     RUN_TEST(test_the_longest_texts_fit_the_detail_and_scroll);
     return UNITY_END();
 }

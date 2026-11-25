@@ -172,7 +172,9 @@ size_t todo_app_status_text(const todo_app *a, char *buf, size_t cap)
     todo_local t;
     int n;
 
-    if (!a->time_valid) {
+    if (a->joining) {
+        n = snprintf(buf, cap, "Joining %.24s\xE2\x80\xA6", a->join_ssid);
+    } else if (!a->time_valid) {
         n = snprintf(buf, cap, "Waiting for time");
     } else if (a->error[0] && a->ms < a->error_until) {
         n = snprintf(buf, cap, "%s", a->error);

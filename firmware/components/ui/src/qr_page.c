@@ -53,6 +53,45 @@ void app_open_qr(todo_app *a, todo_link_kind kind)
     }
 }
 
+todo_event_kind todo_app_take_event(todo_app *a)
+{
+    unsigned bit;
+
+    for (bit = 1; bit <= TODO_EVT_SETUP_CANCELLED; bit <<= 1) {
+        if (a->events & bit) {
+            a->events &= ~bit;
+            return (todo_event_kind)bit;
+        }
+    }
+    return TODO_EVT_NONE;
+}
+
+void todo_app_set_ap_on_demand(todo_app *a, bool on_demand)
+{
+    a->ap_on_demand = on_demand;
+}
+
+void todo_app_set_join(todo_app *a, bool joining, const char *ssid)
+{
+    a->joining = joining;
+    todo_copy(a->join_ssid, sizeof(a->join_ssid), joining && ssid ? ssid : "");
+}
+
+void todo_app_set_wifi_name(todo_app *a, const char *ssid)
+{
+    todo_copy(a->wifi_name, sizeof(a->wifi_name), ssid ? ssid : "");
+}
+
+/* The user asked for a (new) access point: with a platform that makes it, forget the old one and say that it is coming. */
+void app_request_setup(todo_app *a)
+{
+    a->events |= TODO_EVT_SETUP_REQUESTED;
+    if (a->ap_on_demand) {
+        a->ssid[0] = '\0';
+        a->password[0] = '\0';
+    }
+}
+
 void todo_app_open_link(todo_app *a, todo_link_kind kind)
 {
     app_open_qr(a, kind);
@@ -158,12 +197,13 @@ static void setup_page(todo_app *a, cydui_ui *ui, uint32_t elapsed)
         cydui_end_row(ui);
         if (again) {
             a->qr_since = a->ms;
+            app_request_setup(a);
         }
         return;
     }
     if (a->setup_address) {
         snprintf(text, sizeof(text), "%s", SETUP_ADDRESS);
-    } else if (!todo_qr_wifi_text(a->ssid, a->password, text, sizeof(text))) {
+    } else if (a->ssid[0] == '\0' || !todo_qr_wifi_text(a->ssid, a->password, text, sizeof(text))) { /* no access point yet: no code */
         text[0] = '\0';
     }
     sync_code(a, ui, text);
@@ -201,6 +241,7 @@ static void setup_page(todo_app *a, cydui_ui *ui, uint32_t elapsed)
     }
     if (cancel) {
         a->overlay = TODO_OV_NONE;
+        a->events |= TODO_EVT_SETUP_CANCELLED;
     }
 }
 

@@ -53,7 +53,7 @@ void scene_data(todo_memrepo *m, bool worst)
 
 static const char *const NAMES[] = {"quests",  "calendar",     "calendar-six-rows", "agenda",        "detail-quest", "detail-event",
                                     "confirm", "settings",     "confirm-wifi",      "qr-quest",      "qr-event",     "setup",
-                                    "setup-address", "toast"};
+                                    "setup-address", "setup-waiting", "joining", "toast"};
 
 int scene_count(void)
 {
@@ -112,6 +112,15 @@ bool scene_apply(todo_app *a, const char *name)
     if (!strcmp(name, "setup") || !strcmp(name, "setup-address")) {
         todo_app_enter_setup(a, "cyd-todo-4F2A", "k7Qm29xT", "Could not join the network called home-net", false);
         a->setup_address = !strcmp(name, "setup-address");
+        return true;
+    }
+    if (!strcmp(name, "setup-waiting")) { /* the platform has been asked for an access point and has not answered yet */
+        todo_app_set_ap_on_demand(a, true);
+        todo_app_enter_setup(a, "", "", "", true);
+        return true;
+    }
+    if (!strcmp(name, "joining")) {
+        todo_app_set_join(a, true, "home-net");
         return true;
     }
     if (!strcmp(name, "toast")) {

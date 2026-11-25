@@ -69,6 +69,7 @@ const char *backlight_text(int index);                 /* "30 s", "1 min", "5 mi
 
 /* qr_page.c */
 void app_open_qr(todo_app *a, todo_link_kind kind);
+void app_request_setup(todo_app *a);
 void qr_page_frame(todo_app *a, cydui_ui *ui);
 
 /* screens */
