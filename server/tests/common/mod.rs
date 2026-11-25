@@ -44,6 +44,15 @@ pub async fn env() -> Env {
 }
 
 pub async fn env_with_delay(auth_delay: Duration) -> Env {
+    env_full(auth_delay, 0).await
+}
+
+/// An app that shows and reads times in a zone (minutes east of UTC).
+pub async fn env_tz(offset_min: i32) -> Env {
+    env_full(Duration::ZERO, offset_min).await
+}
+
+async fn env_full(auth_delay: Duration, tz_offset_min: i32) -> Env {
     let db = Db::memory().await.unwrap();
     let now = Arc::new(AtomicI64::new(T0));
     let log = Arc::new(Mutex::new(Vec::new()));
@@ -52,7 +61,7 @@ pub async fn env_with_delay(auth_delay: Duration) -> Env {
         db: db.clone(),
         token: TOKEN.as_bytes().to_vec(),
         public_url: PUBLIC_URL.to_string(),
-        tz_offset_min: 0,
+        tz_offset_min,
         csp: cyd_todo_server::html::csp(),
         clock: Arc::new(move || n.load(Ordering::SeqCst)),
         log: Arc::new(move |line| l.lock().unwrap().push(line)),

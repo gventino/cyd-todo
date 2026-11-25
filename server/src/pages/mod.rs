@@ -24,6 +24,7 @@ pub struct Visitor {
     pub session: Session,
 }
 
+pub mod events;
 pub mod quests;
 
 pub fn routes() -> impl Endpoint {
@@ -36,6 +37,11 @@ pub fn routes() -> impl Endpoint {
         .at("/quests/:id", post(quests::update))
         .at("/quests/:id/toggle", post(quests::toggle))
         .at("/quests/:id/delete", get(quests::confirm_delete).post(quests::delete))
+        .at("/events", get(events::list).post(events::create))
+        .at("/events/new", get(events::new_form))
+        .at("/events/:id/edit", get(events::edit_form))
+        .at("/events/:id", post(events::update))
+        .at("/events/:id/delete", get(events::confirm_delete).post(events::delete))
         .around(session_guard)
 }
 
