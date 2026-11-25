@@ -29,6 +29,7 @@ typedef struct {
     cydui_color gold, gold_dark, gold_light, on_gold; /* the accent, its edges, the text on it */
     cydui_color wood, wood_light, on_wood;            /* tabs, borders */
     cydui_color wax, wax_dark, on_wax;                /* destructive buttons */
+    cydui_color alert;                                /* red as text or a mark on the page: lighter than the wax at night */
     cydui_color xp_from, xp_to;                       /* the XP bar gradient */
     cydui_color star_off;                             /* a star that is not earned */
 } todo_colors;

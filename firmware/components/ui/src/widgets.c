@@ -77,7 +77,7 @@ bool ui_quest_card(cydui_ui *ui, todo_palette pal, const todo_quest *q, int32_t 
     if (q->due) {
         overdue = time_valid && !q->done && q->due < today;
         short_date(q->due, date, sizeof(date));
-        ui_text(ui, &todo_serif_12, box.x, r.y + 19, date, overdue ? k->wax : k->muted);
+        ui_text(ui, &todo_serif_12, box.x, r.y + 19, date, overdue ? k->alert : k->muted);
     }
     cydui_pop_id(ui);
     return *toggle || *open;
@@ -255,7 +255,7 @@ bool ui_month_grid(cydui_ui *ui, todo_palette pal, int y, int m, uint32_t event_
             snprintf(num, sizeof(num), "%d", d);
             ui_text_center(ui, &todo_serif_16, cell, num, d == selected_day ? k->on_gold : k->text);
             if (event_days & (1u << d)) {
-                cydui_draw_rect(&ui->ctx, rect_of(cell.x + cell.w - 11, cell.y + 5, 5, 5), d == selected_day ? k->on_gold : k->wax, 255);
+                cydui_draw_rect(&ui->ctx, rect_of(cell.x + cell.w - 11, cell.y + 5, 5, 5), d == selected_day ? k->on_gold : k->alert, 255);
             }
         }
     }

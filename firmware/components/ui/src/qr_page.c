@@ -115,7 +115,7 @@ static void link_page(todo_app *a, cydui_ui *ui, uint32_t elapsed)
     ui_wrapped(ui, &todo_serif_bold_16, k->text, a->qr_kind == TODO_LINK_EVENT ? "New event" : (a->qr_kind == TODO_LINK_QUEST ? "New quest" : "Phone"));
     cydui_spacer(ui, 6);
     if (a->qr_failed) {
-        ui_wrapped(ui, &todo_serif_12, k->wax, a->link == TODO_LINK_OFFLINE ? "The server cannot be reached." : "Could not get a link.");
+        ui_wrapped(ui, &todo_serif_12, k->alert, a->link == TODO_LINK_OFFLINE ? "The server cannot be reached." : "Could not get a link.");
     } else {
         ui_wrapped(ui, &todo_serif_12, k->text, "Scan this with your phone's camera and write it there.");
         cydui_spacer(ui, 6);
@@ -176,7 +176,7 @@ static void setup_page(todo_app *a, cydui_ui *ui, uint32_t elapsed)
     ui_wrapped(ui, &todo_serif_bold_16, k->text, a->setup_address ? "Open the address" : "Set up the Wi-Fi");
     cydui_spacer(ui, 4);
     if (a->reason[0]) {
-        ui_wrapped(ui, &todo_serif_12, k->wax, a->reason);
+        ui_wrapped(ui, &todo_serif_12, k->alert, a->reason);
         cydui_spacer(ui, 4);
     }
     ui_wrapped(ui, &todo_serif_12, k->text,

@@ -167,7 +167,7 @@ static bool has_color(int x0, int y0, int x1, int y1, cydui_color c)
 
 static void test_a_due_date_in_the_past_is_in_wax_red_and_only_for_open_quests(void)
 {
-    const cydui_color wax = todo_colors_of(TODO_PALETTE_PARCHMENT)->wax;
+    const cydui_color wax = todo_colors_of(TODO_PALETTE_PARCHMENT)->alert;
     world_start(&W, TODO_PALETTE_PARCHMENT, true);
     world_frames(&W, 6);
     TEST_ASSERT_FALSE_MESSAGE(has_color(44, 84, 120, 100, wax), "due in two days: not overdue");

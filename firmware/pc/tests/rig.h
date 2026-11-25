@@ -38,5 +38,7 @@ void rig_snapshot(const rig *r, const char *name);
 /* Compares the screen with pc/golden/<name>.hash and writes <build>/golden/<name>.png.
  * CYDUI_UPDATE_GOLDEN=1 writes the hash file instead. */
 void golden_check(const char *name, const rig *r);
+/* The same for any in-memory screen and the errors its UI raised. */
+void golden_check_mem(const char *name, const cydui_mem *mem, uint32_t errors);
 
 #endif /* TODO_RIG_H */

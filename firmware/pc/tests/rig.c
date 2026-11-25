@@ -39,16 +39,15 @@ uint32_t rig_start(rig *r, const cydui_theme *theme)
     return cydui_ui_init(&r->ui, &cfg);
 }
 
-void golden_check(const char *name, const rig *r)
+void golden_check_mem(const char *name, const cydui_mem *mem, uint32_t errors)
 {
     char path[512], msg[256];
-    uint64_t hash = cydui_mem_hash(&r->mem);
+    uint64_t hash = cydui_mem_hash(mem);
     unsigned long long want = 0;
-    uint32_t errors = cydui_ui_errors(&r->ui);
     FILE *f;
 
     snprintf(path, sizeof(path), "%s/%s.png", GOLDEN_OUT_DIR, name);
-    TEST_ASSERT_EQUAL_INT_MESSAGE(0, cydui_mem_write_png(&r->mem, path), "could not write the PNG");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, cydui_mem_write_png(mem, path), "could not write the PNG");
     /* "text was cut" is informative; any other flag means the scene did something wrong */
     TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, errors & ~(uint32_t)CYDUI_ERR_TEXT_TRUNCATED, "the scene raised library errors");
 
@@ -67,6 +66,11 @@ void golden_check(const char *name, const rig *r)
     fclose(f);
     snprintf(msg, sizeof(msg), "'%s': got %016" PRIx64 ", golden %016llx (see the PNG)", name, hash, want);
     TEST_ASSERT_TRUE_MESSAGE(hash == (uint64_t)want, msg);
+}
+
+void golden_check(const char *name, const rig *r)
+{
+    golden_check_mem(name, &r->mem, cydui_ui_errors(&r->ui));
 }
 
 void rig_down(rig *r, int x, int y) { cydui_mem_push_event(&r->mem, CYDUI_EVENT_DOWN, (int16_t)x, (int16_t)y); }

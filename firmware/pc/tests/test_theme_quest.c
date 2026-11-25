@@ -205,6 +205,9 @@ static void test_text_is_readable_on_what_it_is_drawn_on_in_both_palettes(void)
         TEST_ASSERT_TRUE_MESSAGE(contrast_at_least(k->on_gold, k->gold, 45), msg);
         TEST_ASSERT_TRUE_MESSAGE(contrast_at_least(k->on_wood, k->wood, 45), msg);
         TEST_ASSERT_TRUE_MESSAGE(contrast_at_least(k->on_wax, k->wax, 45), msg);
+        TEST_ASSERT_TRUE_MESSAGE(contrast_at_least(k->alert, k->bg, 45), msg);
+        TEST_ASSERT_TRUE_MESSAGE(contrast_at_least(k->alert, k->card, 45), msg);
+        TEST_ASSERT_TRUE_MESSAGE(contrast_at_least(k->alert, k->card_done, 45), msg);
         TEST_ASSERT_TRUE_MESSAGE(contrast_at_least(k->gold, k->card, 20), msg); /* the stars and the bar edge against the card */
     }
 }
