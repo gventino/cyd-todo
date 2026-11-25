@@ -40,13 +40,29 @@ static void begin(const char *name, todo_palette p, bool demo)
     wait_ms(120);
 }
 
-/* A checkpoint: no library errors in the frame, and the picture is the golden one. */
-static void check(int n, const char *label)
+/* A checkpoint taken at once (for a state that is still moving: a request in flight, a toast just shown) ... */
+static void check_now(int n, const char *label)
 {
     char name[96];
     snprintf(name, sizeof(name), "run_%s_%d_%s", run_name, n, label);
     TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, W.errors, name);
     golden_check(name, &W.r);
+}
+
+/* ... and one taken when the screen has settled: popups open a frame after the tap that asked, and widgets take 120 ms to change look. */
+static void check(int n, const char *label)
+{
+    wait_ms(130);
+    check_now(n, label);
+}
+
+static int quests_due(int32_t due)
+{
+    int i, n = 0;
+    for (i = 0; i < W.app.store.n_quests; i++) {
+        n += W.app.store.quests[i].due == due;
+    }
+    return n;
 }
 
 static void status_is(const char *want)
@@ -63,7 +79,7 @@ static void test_run_complete_a_quest(void)
     begin("complete", TODO_PALETTE_PARCHMENT, true);
     check(1, "loaded");
     tap(CHECK_X, CARD0_Y);
-    check(2, "pending");
+    check_now(2, "pending");
     TEST_ASSERT_TRUE(W.app.store.quests[0].done);
     wait_ms(600);
     check(3, "answered");
@@ -86,7 +102,7 @@ static void test_run_level_up_at_night(void)
     TEST_ASSERT_EQUAL_INT32(70, W.app.store.xp);
     check(1, "before");
     tap(CHECK_X, CARD0_Y);
-    check(2, "toast");
+    check_now(2, "toast");
     TEST_ASSERT_EQUAL_STRING("+30 XP  Level 2!", W.app.toast);
     wait_ms(600);
     check(3, "settled");
@@ -98,7 +114,7 @@ static void test_run_a_save_that_fails(void)
     begin("failsave", TODO_PALETTE_PARCHMENT, true);
     W.mem.fail_next = 1;
     tap(CHECK_X, CARD0_Y);
-    check(1, "flipped");
+    check_now(1, "flipped");
     wait_ms(400);
     check(2, "back");
     TEST_ASSERT_FALSE(W.app.store.quests[0].done);
@@ -142,6 +158,23 @@ static void test_run_delete_an_event(void)
     TEST_ASSERT_EQUAL_INT(3, W.mem.n_events);
     tap(day_x(3), day_y(3));
     check(5, "agenda_after");
+}
+
+static void test_run_a_day_with_an_event_and_an_open_quest(void)
+{
+    begin("dayboth", TODO_PALETTE_PARCHMENT, true);
+    tap(TAB_CALENDAR_X, TAB_Y);
+    tap(day_x(4), day_y(4)); /* "Slay the inbox" is due, and there is an event */
+    wait_ms(100);
+    check(1, "agenda");
+    TEST_ASSERT_EQUAL_INT(TODO_OV_AGENDA, W.app.overlay);
+    TEST_ASSERT_EQUAL_INT(1, quests_due(20261204));
+    tap(AGENDA_ROW0_X, AGENDA_ROW0_Y + 36); /* the second row: the quest */
+    check(2, "quest_detail");
+    TEST_ASSERT_EQUAL_INT(TODO_ITEM_QUEST, W.app.item_kind);
+    tap(DETAIL_CLOSE_X, DETAIL_BUTTONS_Y);
+    check(3, "back_in_the_agenda");
+    TEST_ASSERT_EQUAL_INT(TODO_OV_AGENDA, W.app.overlay);
 }
 
 static void test_run_a_walk_through_the_months(void)
@@ -302,6 +335,7 @@ int main(void)
     RUN_TEST(test_run_a_save_that_fails);
     RUN_TEST(test_run_delete_a_quest);
     RUN_TEST(test_run_delete_an_event);
+    RUN_TEST(test_run_a_day_with_an_event_and_an_open_quest);
     RUN_TEST(test_run_a_walk_through_the_months);
     RUN_TEST(test_run_a_new_quest_written_on_the_phone_at_night);
     RUN_TEST(test_run_a_link_that_is_refused_and_a_server_that_is_gone);

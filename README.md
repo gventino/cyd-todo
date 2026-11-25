@@ -36,7 +36,7 @@ git clone --recurse-submodules https://github.com/gventino/cyd-todo.git
 ```
 
 ## Status of the plan
-A0 repository and contract (done) - A1 server device API (done, see `server/README.md`) - A2 server phone pages (done) - A3 model and UI on the PC (A3.1 model, A3.2 repository, A3.3 theme, A3.4 QR done; A3.5 screens, PC program and budget guard done; A3.6 scripted runs and goldens next) - A4 Wi-Fi setup by QR - A5 network and sync - A6 polish and hardening - A7 TLS.
+A0 repository and contract (done) - A1 server device API (done, see `server/README.md`) - A2 server phone pages (done) - A3 model and UI on the PC (done: model, repository, theme, QR, every screen, scripted runs and about 90 golden pictures) - A4 Wi-Fi setup by QR - A5 network and sync - A6 polish and hardening - A7 TLS.
 
 ## License
 MIT, see `LICENSE`. Third party: the QR encoder of Project Nayuki (MIT, `firmware/components/qr/vendor/`) and Liberation Serif (SIL OFL). The serif font that will be bundled is under the SIL OFL (its license is in `firmware/components/theme_quest/fonts/`).

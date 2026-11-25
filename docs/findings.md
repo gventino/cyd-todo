@@ -16,3 +16,14 @@ Everything in the library that got in the way while writing this application, on
 | 10 | usage of the UI memory (A3.5) | `cydui_cmd_count` says how many commands a frame used, but nothing says how much of the text memory or how many state entries were used, and a full state table raises no flag (a scroll offset is just lost). The budget guard found the text need by shrinking the buffer until the worst-case scenes failed: between 512 and 768 bytes (the board gets 1536); the state need could not be found that way (16 entries still passed every scene). | The guard keeps the board's sizes (320 commands, 1536 text bytes, 64 states) and the busiest frame is 112 commands; 64 states stays a safe guess until A4 measures it on the board. | Expose high-water marks (`cydui_ui_stats`: commands, text bytes, state entries, tweens) and a flag for a full state table. | open |
 
 *(Entries are added as they are found, with the date and the step.)*
+
+## Summary at the end of A3 (the UI on the PC)
+Ten entries, sorted by what is proposed for `cydui` **1.0.0**. The choice of what really goes into the library is the owner's; board findings from A4 to A6 will be added to this table.
+
+| Proposal | Entries |
+|---|---|
+| **Fix in the library** (small, and each one cost real work here) | #10 high-water marks for commands, text bytes, state entries and tweens, and a flag for a full state table; #5 a `user` pointer in `cydui_theme` so a painter finds the application's palette; #3 `cydui_text_fit` (the bytes that fit a width, with an optional ellipsis, measured as drawn) |
+| **Document only** | #1 a QR (or any bitmap) redrawn in the same buffer needs `cydui_invalidate` (and the size is part of the hash); #4 the two-rectangle painter idiom; #7 the root margin is `style.spacing`; #8 wide-but-short targets |
+| **Later / nice to have** | #2 more than one font per style; #9 a wrapped label in another font and color; #6 a 1 bpp bitmap with an integer scale (would remove 13 to 16 KB of the QR mask) |
+
+Things that worked without friction are not entries: the scroll list with custom cards, popups, tweens for the XP bar, the id stack, `cydui_interact` for a month grid, the board-size memory (112 of 320 commands in the worst case).
