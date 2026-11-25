@@ -14,7 +14,7 @@ use subtle::ConstantTimeEq;
 use crate::app::AppState;
 use crate::db::Session;
 use crate::html::{Html, page};
-use crate::limits::{BODY_MAX, SESSION_TTL};
+use crate::limits::{self, BODY_MAX, SESSION_TTL};
 use crate::token;
 
 /// What a page handler knows about the visitor.
@@ -24,8 +24,37 @@ pub struct Visitor {
     pub session: Session,
 }
 
+pub mod quests;
+
 pub fn routes() -> impl Endpoint {
-    Route::new().at("/", get(home)).at("/logout", post(logout)).around(session_guard)
+    Route::new()
+        .at("/", get(home))
+        .at("/logout", post(logout))
+        .at("/quests", get(quests::list).post(quests::create))
+        .at("/quests/new", get(quests::new_form))
+        .at("/quests/:id/edit", get(quests::edit_form))
+        .at("/quests/:id", post(quests::update))
+        .at("/quests/:id/toggle", post(quests::toggle))
+        .at("/quests/:id/delete", get(quests::confirm_delete).post(quests::delete))
+        .around(session_guard)
+}
+
+/// The links at the top of every page.
+pub fn nav() -> Html {
+    Html::tag(
+        "nav",
+        &[],
+        Html::join([
+            Html::tag("a", &[("href", "/app")], Html::lit("Home")),
+            Html::tag("a", &[("href", "/app/quests")], Html::lit("Quests")),
+            Html::tag("a", &[("href", "/app/events")], Html::lit("Calendar")),
+        ]),
+    )
+}
+
+/// A page with the navigation above `body`.
+pub fn shell(title: &str, body: Html) -> String {
+    page(title, Html::join([nav(), body]))
 }
 
 // ---- responses ----
@@ -179,17 +208,33 @@ pub fn csrf_field(v: &Visitor) -> Html {
 // ---- the pages of this step ----
 
 #[handler]
-fn home(Data(v): Data<&Visitor>) -> Response {
-    let body = Html::join([
-        Html::tag("h1", &[], Html::lit("Quest log")),
-        Html::tag("p", &[], Html::lit("You are in.")),
-        Html::tag(
-            "form",
-            &[("method", "post"), ("action", "/app/logout")],
-            Html::join([csrf_field(v), Html::tag("button", &[("type", "submit")], Html::lit("Leave"))]),
-        ),
-    ]);
-    html_response(StatusCode::OK, page("Quest log", body))
+async fn home(Data(state): Data<&Arc<AppState>>, Data(v): Data<&Visitor>) -> Response {
+    let rows = match state.db.list_quests(limits::LIST_MAX as i64).await {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!("database error: {e}");
+            return error_page(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    let open: Vec<Html> = rows.iter().filter(|q| q.state == "open").map(quests::summary).collect();
+    let mut body = Html::tag("h1", &[], Html::lit("Quest log"));
+    body.push(&Html::tag("h2", &[], Html::lit("Open quests")));
+    if open.is_empty() {
+        body.push(&Html::tag("p", &[("class", "muted")], Html::lit("No open quests. Time to write one.")));
+    }
+    for q in open {
+        body.push(&q);
+    }
+    body.push(&Html::tag("a", &[("class", "button"), ("href", "/app/quests/new")], Html::lit("New quest")));
+    body.push(&Html::tag(
+        "form",
+        &[("method", "post"), ("action", "/app/logout")],
+        Html::join([
+            csrf_field(v),
+            Html::tag("button", &[("type", "submit"), ("class", "danger")], Html::lit("Leave")),
+        ]),
+    ));
+    html_response(StatusCode::OK, shell("Quest log", body))
 }
 
 #[derive(Deserialize)]

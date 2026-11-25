@@ -131,7 +131,7 @@ fn authorized(req: &Request, token: &[u8]) -> bool {
 }
 
 /// An id in a path: digits only, a positive number that fits. Anything else names nothing, so it is a 404.
-fn parse_id(s: &str) -> Result<i64, ApiError> {
+pub fn parse_id(s: &str) -> Result<i64, ApiError> {
     if s.is_empty() || s.len() > 19 || !s.bytes().all(|b| b.is_ascii_digit()) {
         return Err(ApiError::not_found());
     }

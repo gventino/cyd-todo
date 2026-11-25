@@ -135,6 +135,7 @@ a{color:var(--gold)}\
 label{display:block;margin:.8rem 0 .2rem;font-weight:bold}\
 input,textarea,select{width:100%;font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:.4rem;padding:.6rem}\
 textarea{min-height:6rem}\
+.notes{white-space:pre-wrap;word-break:break-word}\
 button,.button{display:inline-block;font:inherit;border:0;border-radius:.4rem;padding:.7rem 1.1rem;margin:.6rem .4rem .2rem 0;background:var(--gold);color:var(--ink);text-decoration:none;min-height:2.75rem}\
 button.danger,.button.danger{background:var(--red);color:#fff}\
 .error{border-left:.4rem solid var(--red);padding:.4rem .7rem;margin:.6rem 0;background:var(--card)}\
