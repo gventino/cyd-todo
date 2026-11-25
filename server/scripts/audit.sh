@@ -7,7 +7,7 @@ fail=0
 say() { echo "audit: $*" >&2; fail=1; }
 
 # no unsafe code, enforced by the compiler too
-grep -rn 'unsafe' src | grep -v 'forbid(unsafe_code)' && say "unsafe in src/"
+grep -rnE 'unsafe[[:space:]]+(\{|fn|impl|trait)' src && say "unsafe code in src/"
 grep -q 'forbid(unsafe_code)' src/lib.rs && grep -q 'forbid(unsafe_code)' src/main.rs || say "forbid(unsafe_code) is missing"
 
 # SQL is a static string: nothing builds a query at run time
