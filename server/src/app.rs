@@ -35,6 +35,10 @@ pub struct AppState {
     pub log: LogSink,
     /// What a wrong token costs the caller (200 ms; not a lockout).
     pub auth_delay: Duration,
+    /// A deliberate misbehavior of the device API, for tests of the firmware (needs `ALLOW_FAULTS=1`).
+    pub fault: Option<crate::faults::Fault>,
+    /// How long the `slow` fault waits.
+    pub fault_slow: Duration,
 }
 
 impl AppState {
@@ -105,12 +109,16 @@ async fn guard<E: Endpoint>(next: E, req: Request) -> poem::Result<Response> {
         };
         pages::harden(r, &state)
     } else if method == Method::GET && path == "/health" || authorized(&req, &state.token) {
-        match next.call(req).await {
+        let genuine = match next.call(req).await {
             Ok(r) => r.into_response(),
             Err(e) => match e.downcast_ref::<ApiError>() {
                 Some(api) => api.to_response(),
                 None => ApiError::from_status(e.status()).to_response(),
             },
+        };
+        match state.fault {
+            Some(fault) if path != "/health" => crate::faults::apply(fault, state.fault_slow, genuine).await,
+            _ => genuine,
         }
     } else {
         tokio::time::sleep(state.auth_delay).await;

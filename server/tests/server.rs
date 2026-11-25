@@ -35,6 +35,8 @@ async fn start() -> std::net::SocketAddr {
         clock: cyd_todo_server::app::system_clock(),
         log: Arc::new(|_| {}),
         auth_delay: Duration::ZERO,
+        fault: None,
+        fault_slow: Duration::ZERO,
     });
     let acceptor = TcpListener::bind("127.0.0.1:0").into_acceptor().await.unwrap();
     let addr = acceptor.local_addr().remove(0).0.as_socket_addr().copied().unwrap();

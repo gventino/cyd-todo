@@ -89,6 +89,10 @@ impl Config {
         if fault.is_some() && lookup("ALLOW_FAULTS").as_deref() != Some("1") {
             return Err(ConfigError("FAULT is only accepted together with ALLOW_FAULTS=1".into()));
         }
+        if let Some(name) = fault.as_deref().filter(|n| crate::faults::Fault::parse(n).is_none()) {
+            let _ = name;
+            return Err(ConfigError(format!("FAULT must be one of: {}", crate::faults::Fault::names())));
+        }
 
         Ok(Config {
             token,
@@ -172,5 +176,22 @@ mod tests {
         assert!(cfg(&v).is_err());
         v.push(("ALLOW_FAULTS", "1"));
         assert_eq!(cfg(&v).unwrap().fault.as_deref(), Some("slow"));
+        for (name, _) in crate::faults::Fault::ALL {
+            let mut v = base();
+            v.push(("FAULT", name));
+            v.push(("ALLOW_FAULTS", "1"));
+            assert!(cfg(&v).is_ok(), "{name}");
+        }
+        for bad in ["Slow", "nonsense", "slow ", "error 500"] {
+            let mut v = base();
+            v.push(("FAULT", bad));
+            v.push(("ALLOW_FAULTS", "1"));
+            let e = cfg(&v).unwrap_err().to_string();
+            assert!(e.contains("slow") && e.contains("wrongtype"), "the message lists the modes: {e}");
+        }
+        let mut v = base();
+        v.push(("FAULT", "slow"));
+        v.push(("ALLOW_FAULTS", "yes"));
+        assert!(cfg(&v).is_err(), "only the exact 1 allows faults");
     }
 }

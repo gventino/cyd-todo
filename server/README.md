@@ -20,7 +20,7 @@ export PUBLIC_URL=http://192.168.1.50:8080                         # what a phon
 | `BIND` | listen address | `0.0.0.0:8080` |
 | `DATABASE_URL` | SQLite file | `sqlite://cyd-todo.db` |
 | `TZ_OFFSET_MIN` | zone for the phone forms (A2), minutes east of UTC | `0` |
-| `FAULT`, `ALLOW_FAULTS` | fault injection for firmware tests (A5); `FAULT` is refused without `ALLOW_FAULTS=1` | off |
+| `FAULT`, `ALLOW_FAULTS` | fault injection for firmware tests: `FAULT` is one of `slow truncate huge garbage error500 chunked deep wrongtype` (see `docs/api.md`) and is refused without `ALLOW_FAULTS=1`; never for real use | off |
 
 A wrong configuration stops the server at start with a message that names the variable and never prints the token. The migrations run at start. Ctrl-C and SIGTERM stop it cleanly.
 

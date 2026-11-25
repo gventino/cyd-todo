@@ -72,7 +72,14 @@ async fn main() {
         clock: system_clock(),
         log: tracing_sink(),
         auth_delay: Duration::from_millis(200),
+        fault: cfg.fault.as_deref().and_then(cyd_todo_server::faults::Fault::parse),
+        fault_slow: cyd_todo_server::faults::SLOW_DEFAULT,
     });
+    if let Some(f) = &cfg.fault {
+        tracing::warn!(
+            "FAULT INJECTION IS ON ({f}): the device API will misbehave on purpose. Never run this for real use."
+        );
+    }
     let acceptor =
         TcpListener::bind(cfg.bind.clone()).into_acceptor().await.unwrap_or_else(|e| fail(1, "cannot listen", e));
     tracing::info!("listening on {} (public url {})", cfg.bind, cfg.public_url);

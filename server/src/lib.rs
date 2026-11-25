@@ -5,6 +5,7 @@ pub mod app;
 pub mod config;
 pub mod db;
 pub mod error;
+pub mod faults;
 pub mod html;
 pub mod http_error;
 pub mod limits;

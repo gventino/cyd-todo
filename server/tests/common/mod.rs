@@ -66,6 +66,8 @@ async fn env_full(auth_delay: Duration, tz_offset_min: i32) -> Env {
         clock: Arc::new(move || n.load(Ordering::SeqCst)),
         log: Arc::new(move |line| l.lock().unwrap().push(line)),
         auth_delay,
+        fault: None,
+        fault_slow: Duration::ZERO,
     });
     let ep = poem::EndpointExt::boxed(poem::EndpointExt::map_to_response(app(state)));
     Env { cli: TestClient::new(ep), now, log, db }

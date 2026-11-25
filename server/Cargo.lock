@@ -214,6 +214,7 @@ dependencies = [
 name = "cyd-todo-server"
 version = "0.1.0"
 dependencies = [
+ "futures-util",
  "getrandom",
  "poem",
  "serde",

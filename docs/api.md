@@ -103,4 +103,4 @@ A phone page is a second client of the same rules: it uses the same validators a
 | `BIND` | listen address, default `0.0.0.0:8080` |
 | `DATABASE_URL` | SQLite file, default `sqlite://cyd-todo.db` |
 | `TZ_OFFSET_MIN` | the zone of the phone pages, minutes east of UTC, -840 to 840, default 0 |
-| `FAULT` | a fault-injection mode for tests of the firmware (`slow`, `truncate`, `huge`, `garbage`, `error500`); never set in real use, refused unless `ALLOW_FAULTS=1`. Parsed in A1, acted on in A5. |
+| `FAULT` | a fault-injection mode for tests of the firmware, refused unless `ALLOW_FAULTS=1` and a name from this list: `slow` (the right answer after 20 s), `truncate` (a correct `Content-Length` and the connection closed half way), `huge` (a 200 KB body), `garbage` (200 and bytes that are not JSON), `error500`, `chunked` (no `Content-Length`), `deep` (JSON nested 1000 deep), `wrongtype` (valid JSON, wrong types everywhere). Only the device API misbehaves: never `/health`, a wrong token's 401, or the phone pages; the database is written as usual. The server logs a loud warning at start. Never set in real use. |
