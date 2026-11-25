@@ -182,7 +182,7 @@ void todo_theme_quest_init(cydui_theme *t, todo_palette p)
     s->radius = 0;
     s->pad_x = 10;
     s->pad_y = 6;
-    s->spacing = 8;
+    s->spacing = 0; /* also the margin of the root layout: the screen is edge to edge; containers that want a gap ask for one */
     s->min_target = 32;
     s->anim_ms = 120;
     cydui_theme_derive_table(t);

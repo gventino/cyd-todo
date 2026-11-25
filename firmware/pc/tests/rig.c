@@ -68,3 +68,15 @@ void golden_check(const char *name, const rig *r)
     snprintf(msg, sizeof(msg), "'%s': got %016" PRIx64 ", golden %016llx (see the PNG)", name, hash, want);
     TEST_ASSERT_TRUE_MESSAGE(hash == (uint64_t)want, msg);
 }
+
+void rig_down(rig *r, int x, int y) { cydui_mem_push_event(&r->mem, CYDUI_EVENT_DOWN, (int16_t)x, (int16_t)y); }
+void rig_move(rig *r, int x, int y) { cydui_mem_push_event(&r->mem, CYDUI_EVENT_MOVE, (int16_t)x, (int16_t)y); }
+void rig_up(rig *r, int x, int y) { cydui_mem_push_event(&r->mem, CYDUI_EVENT_UP, (int16_t)x, (int16_t)y); }
+void rig_advance(rig *r, uint32_t ms) { r->mem.now += ms; }
+
+void rig_snapshot(const rig *r, const char *name)
+{
+    char path[512];
+    snprintf(path, sizeof(path), "%s/%s.png", GOLDEN_OUT_DIR, name);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, cydui_mem_write_png(&r->mem, path), "could not write the PNG");
+}

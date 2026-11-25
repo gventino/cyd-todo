@@ -26,6 +26,15 @@ typedef struct {
 /* Starts a rig with `theme` (copied). Returns 0 or a CYDUI_ERR_* flag. */
 uint32_t rig_start(rig *r, const cydui_theme *theme);
 
+/* Synthetic touches (read by the next cydui_ui_begin) and the clock of the in-memory backend. */
+void rig_down(rig *r, int x, int y);
+void rig_move(rig *r, int x, int y);
+void rig_up(rig *r, int x, int y);
+void rig_advance(rig *r, uint32_t ms);
+
+/* Writes <build>/golden/<name>.png without comparing anything (to look at). */
+void rig_snapshot(const rig *r, const char *name);
+
 /* Compares the screen with pc/golden/<name>.hash and writes <build>/golden/<name>.png.
  * CYDUI_UPDATE_GOLDEN=1 writes the hash file instead. */
 void golden_check(const char *name, const rig *r);
