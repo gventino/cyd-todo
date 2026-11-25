@@ -114,3 +114,12 @@ todo_component(provision)
 todo_test(test_prov_form todo_provision)
 todo_test(test_prov_misc todo_provision)
 todo_test(test_prov_fuzz todo_provision)
+
+# ---- the network side: the JSON reader and the repository that talks to the server ----
+todo_component(jsonr)
+todo_test(test_jsonr todo_jsonr)
+
+todo_component(netrepo)
+target_link_libraries(todo_netrepo PUBLIC todo_jsonr todo_repo todo_model)
+target_include_directories(todo_netrepo PRIVATE ${COMP}/netrepo/src)
+todo_test(test_netrepo todo_netrepo)
