@@ -29,7 +29,7 @@ int quests_due_on(const todo_store *s, int32_t due)
 void screen_calendar(todo_app *a, cydui_ui *ui)
 {
     const todo_colors *k = todo_colors_of(a->palette);
-    int dir, tapped, today_day = 0, rows, grid_h, i, n_events = 0;
+    int tapped, today_day = 0, rows, grid_h, i, n_events = 0;
     todo_local t;
     char line[64], day[24];
     cydui_rect r;
@@ -39,13 +39,7 @@ void screen_calendar(todo_app *a, cydui_ui *ui)
         ui_text_center(ui, &todo_serif_16, r, "Waiting for time", k->muted);
         return;
     }
-    dir = ui_month_header(ui, a->palette, a->cal_year, a->cal_month);
-    if (dir < 0 && !(a->cal_year == 2000 && a->cal_month == 1)) {
-        todo_month_prev(&a->cal_year, &a->cal_month);
-    } else if (dir > 0 && !(a->cal_year == 2099 && a->cal_month == 12)) {
-        todo_month_next(&a->cal_year, &a->cal_month);
-    }
-    if (dir != 0) {
+    if (ui_month_header(ui, a->palette, &a->cal_year, &a->cal_month)) {
         a->cal_day = 0;
         app_want_events(a);
     }

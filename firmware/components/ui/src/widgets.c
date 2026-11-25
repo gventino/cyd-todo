@@ -162,8 +162,8 @@ static void arrow_button(cydui_ui *ui, cydui_rect r, const char *label, bool pre
     cydui_paint(ui, &pi);
 }
 
-/* "<  December 2026  >": returns -1 for the previous month, +1 for the next, 0 for neither. */
-int ui_month_header(cydui_ui *ui, todo_palette pal, int y, int m)
+/* "<  December 2026  >": a tap on an arrow moves the month (2000-01 to 2099-12) before the title is drawn; true if it moved. */
+bool ui_month_header(cydui_ui *ui, todo_palette pal, int *y, int *m)
 {
     const todo_colors *k = todo_colors_of(pal);
     cydui_mods mods;
@@ -171,9 +171,10 @@ int ui_month_header(cydui_ui *ui, todo_palette pal, int y, int m)
     cydui_rect r, prev, next;
     cydui_response rp, rn;
     char title[32];
+    bool moved = false;
 
     if (!cydui_widget_begin(ui)) {
-        return 0;
+        return false;
     }
     mods = cydui_take_mods(ui);
     cydui_push_id_str(ui, "month");
@@ -186,12 +187,19 @@ int ui_month_header(cydui_ui *ui, todo_palette pal, int y, int m)
     next = rect_of(r.x + r.w - 52, r.y + 3, 48, 26);
     rp = cydui_interact(ui, id_prev, rect_of(r.x, r.y, 56, r.h), CYDUI_SENSE_CLICK);
     rn = cydui_interact(ui, id_next, rect_of(r.x + r.w - 56, r.y, 56, r.h), CYDUI_SENSE_CLICK);
+    if (rp.clicked && !(*y == 2000 && *m == 1)) {
+        todo_month_prev(y, m);
+        moved = true;
+    } else if (rn.clicked && !(*y == 2099 && *m == 12)) {
+        todo_month_next(y, m);
+        moved = true;
+    }
     arrow_button(ui, prev, "<", rp.pressed);
     arrow_button(ui, next, ">", rn.pressed);
-    snprintf(title, sizeof(title), "%s %d", todo_month_name(m), y);
+    snprintf(title, sizeof(title), "%s %d", todo_month_name(*m), *y);
     ui_text_center(ui, &todo_serif_bold_16, r, title, k->text);
     cydui_pop_id(ui);
-    return rp.clicked ? -1 : (rn.clicked ? 1 : 0);
+    return moved;
 }
 
 /*

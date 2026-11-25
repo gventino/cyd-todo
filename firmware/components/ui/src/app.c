@@ -78,6 +78,7 @@ static void on_result(todo_app *a, const todo_result *r)
     }
     if (r->offline) {
         a->link = TODO_LINK_OFFLINE;
+        a->error[0] = '\0'; /* "Offline" says it better than an older complaint */
         if (r->kind == TODO_REQ_NEW_LINK && a->overlay == TODO_OV_QR) {
             a->qr_failed = true;
         }
@@ -90,6 +91,7 @@ static void on_result(todo_app *a, const todo_result *r)
         a->link = TODO_LINK_ERROR;
         if (r->kind == TODO_REQ_SET_QUEST_DONE || r->kind == TODO_REQ_DELETE_QUEST || r->kind == TODO_REQ_DELETE_EVENT) {
             fail(a, "Could not save");
+            a->toast_until = 0; /* the XP that was announced is not coming */
             app_want_quests(a); /* the card goes back to what the server has */
             app_want_events(a);
         } else {

@@ -51,7 +51,7 @@ bool ui_quest_card(cydui_ui *ui, todo_palette pal, const todo_quest *q, int32_t 
 void ui_xp_header(cydui_ui *ui, todo_palette pal, int32_t xp);
 void ui_wrapped(cydui_ui *ui, const cydui_font *f, cydui_color c, const char *s);
 bool ui_wax_button(cydui_ui *ui, todo_palette pal, const char *label, int w, int h);
-int ui_month_header(cydui_ui *ui, todo_palette pal, int y, int m);
+bool ui_month_header(cydui_ui *ui, todo_palette pal, int *y, int *m);
 bool ui_month_grid(cydui_ui *ui, todo_palette pal, int y, int m, uint32_t event_days, int today_day, int selected_day, int *tapped_day);
 bool ui_row_button(cydui_ui *ui, todo_palette pal, const char *title, const char *sub, bool muted);
 typedef enum { ROW_INFO, ROW_ARROWS, ROW_TAP } setting_mode;

@@ -7,6 +7,7 @@
 #include "todo/datetime.h"
 #include "todo/levels.h"
 #include "unity.h"
+#include "coords.h"
 #include "world.h"
 
 void setUp(void) {}
@@ -28,9 +29,6 @@ static void status(char *buf, size_t cap)
 }
 
 /* the first card: its checkbox zone and its title zone */
-#define CHECK_X 20
-#define TITLE_X 120
-#define CARD0_Y 82
 
 static void test_the_quests_screen_loads_and_says_when_it_synced(void)
 {
@@ -260,12 +258,6 @@ static void test_the_empty_list_says_so(void)
 
 /* ---- the calendar ---- */
 
-#define TAB_QUESTS_X 53
-#define TAB_CALENDAR_X 160
-#define TAB_Y 16
-/* December 2026: the grid starts at x 2, y 78 and has 5 rows of 26 px; the 1st is a Tuesday */
-static int day_x(int d) { return 2 + ((d + 0) % 7) * 45 + 22; } /* column of day d in a month that starts on a Tuesday: (d + 0) % 7 */
-static int day_y(int d) { return 78 + ((d + 0) / 7) * 26 + 13; }
 
 static void open_calendar(todo_palette p)
 {
@@ -362,14 +354,6 @@ static void test_an_empty_day_says_so(void)
 
 /* ---- agenda, detail, confirm ---- */
 
-#define AGENDA_ROW0_X 160
-#define AGENDA_ROW0_Y 56
-#define DETAIL_DELETE_X 77
-#define DETAIL_CLOSE_X 190
-#define DETAIL_BUTTONS_Y 178
-#define CONFIRM_CANCEL_X 88
-#define CONFIRM_DELETE_X 201
-#define CONFIRM_BUTTONS_Y 139
 
 static void open_agenda_of_the_3rd(void)
 {
@@ -507,15 +491,7 @@ static void test_the_longest_texts_fit_the_detail_and_scroll(void)
 
 /* ---- settings, the QR pages and the setup ---- */
 
-#define TAB_SETTINGS_X 267
-#define NEW_QUEST_X 264
-#define NEW_QUEST_Y 48
 
-#define QR_BUTTON_X 242
-#define QR_BUTTON_Y 130
-#define CONFIRM_WIFI_CANCEL_X 80
-#define CONFIRM_WIFI_CONTINUE_X 202
-#define CONFIRM_WIFI_Y 133
 
 static void open_settings(todo_palette p)
 {
