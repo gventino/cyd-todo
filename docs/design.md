@@ -15,20 +15,11 @@ Total XP needed to *reach* level `L` (L >= 1) is `50 * L * (L - 1)`: level 1 at 
 ## Screens (320 x 240)
 Three tabs at the top (parchment on dark wood): **Quests**, **Calendar**, **Settings**. A thin status line at the bottom: `Synced 12:04`, `Offline`, `Waiting for time`, or an error.
 
-```
- Quests screen                          Calendar screen
-+--------------------------------+     +--------------------------------+
-| [Quests] Calendar  Settings    |     |  Quests [Calendar] Settings    |
-| Lv 2  =========-----  170/200  |     |  < December 2026 >             |
-|--------------------------------|     |  M  T  W  T  F  S  S           |
-| [ ] Slay the inbox      ***  1 |     |  .  1  2  3  4  5  6           |
-| [ ] Visit the dentist   **   3 |     |  7  8 [9] 10 11 12 13  <- dots |
-| [x] Pay the guild fees  *    - |     |  ...                           |
-|                                |     |--------------------------------|
-|                  [ + New quest]|     |  Wed 9: 10:00-10:45 Dentist    |
-| Synced 12:04                   |     |                  [ + Add event]|
-+--------------------------------+     +--------------------------------+
-```
+![Quests](img/quests-day.png) ![Calendar](img/calendar-day.png)
+![Agenda](img/agenda-day.png) ![Quest details](img/detail-day.png)
+![Settings](img/settings-night.png) ![New quest](img/qr-quest-day.png) ![Wi-Fi setup](img/setup-day.png)
+
+*(Rendered by `firmware/tools/shots.sh`; the sketches of the first plan became these screens. Every one of them has a golden hash in `firmware/pc/golden/`.)*
 - A **quest card** is a row at least 32 px tall (touch target): a checkbox (tap to complete, with a short animation and the XP gained), the title, stars for the difficulty, the due date. Tapping the title opens a popup with the notes and a *Delete* button; delete asks again (a confirmation popup, CT-22). Done quests are faded and sit below the open ones.
 - **New quest** (header of the Quests tab) and **Add event** (in the agenda) open the **QR page**: not a popup but a page of its own, because the code is 164 px of the 240. The code on the left; on the right the title, a line of instruction, the time the link has left and **Cancel**. The board asks `POST /link` first (`Preparing...`; on failure the page says why and offers **Retry**), asks `GET /changes` every 3 seconds while it is open, and closes by itself with a toast `Saved on your phone` when the revision moves (and for good after 10 minutes, with `Link expired`).
 - **Calendar**: month grid (Monday first, as many rows as the month needs: 4 to 6), days with events marked by a small square, today ringed, the selected day filled; a line under it says what the selected day holds. **Tapping a day opens its agenda as a popup** (the 192 px under the tabs cannot hold a grid and a list): the events of the day in order (`10:00-10:45`; `22:00 until Thu 01:30`, `Until 01:30`, `All day`) and the quests due that day, **Add event** and **Close**. Tapping an item opens its **detail** (full title, notes or the start and end, **Delete** in wax, then a modal **confirmation**: two taps, and the server answers last). `<` and `>` change month and ask for that month's events (the month and a week on either side).

@@ -8,6 +8,17 @@ Nothing is typed on the display:
 
 > **Status: development only.** The board talks to the server over **plain HTTP**. Do not put real data in it and do not expose the server outside your LAN until the TLS step (A7 in the plan) is done. See [`docs/threat.md`](docs/threat.md).
 
+## Screens
+The real 320 x 240 screens, rendered by the PC program with the demo data (`firmware/tools/shots.sh`). Day palette, then night (candlelight).
+
+| Quests | Calendar | Agenda of a day | Settings |
+|---|---|---|---|
+| ![](docs/img/quests-day.png) | ![](docs/img/calendar-day.png) | ![](docs/img/agenda-day.png) | ![](docs/img/settings-day.png) |
+
+| Quest details | New quest (QR) | Wi-Fi setup (QR) | Quests, night |
+|---|---|---|---|
+| ![](docs/img/detail-night.png) | ![](docs/img/qr-quest-night.png) | ![](docs/img/setup-night.png) | ![](docs/img/quests-night.png) |
+
 ## Layout
 | Path | What |
 |---|---|
