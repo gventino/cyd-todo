@@ -78,7 +78,9 @@ Nothing with a date is drawn before SNTP has answered (`Waiting for time`). A fi
 Free heap in the library's gallery before Wi-Fi: about 293 KB. Wi-Fi station and lwIP take 60 to 80 KB, the HTTP buffer 16 KB, the model under 12 KB, the QR mask about 14 KB while shown, the UI storage about 20 KB (320 commands, 1.5 KB of text, at least 64 state entries). Goal: at least 100 KB free during a sync and 80 KB during setup. If it does not fit: smaller caches first, then smaller strips.
 
 ## Look
-The `quest` theme lives in this repository (not in the library): a parchment page, dark wood tabs, a gold accent, red wax for destructive buttons, borders as stacked rectangles, a serif font (Liberation Serif, OFL, Latin-1) made with the library's `fontgen.py`, the XP bar as a gradient, a short fade-in of cards (`cydui_animate`). A second palette, "candlelight", for the dark. A test checks that every screen fits the 320-command list.
+The `quest` theme lives in this repository (`firmware/components/theme_quest`, not in the library): a parchment page, dark wood tabs, a gold accent, red wax for destructive buttons, borders as stacked rectangles (3 to 6 commands per widget), a serif font (Liberation Serif, OFL, Latin-1: regular 12 and 16, bold 16 and 24) made by `firmware/tools/gen_fonts.sh` with the library's `fontgen.py` and checked by `ci.sh`, the XP bar as a gradient, stars from a 12x12 A4 mask, a short fade-in of cards (`cydui_animate`, from A3.5). A second palette, "candlelight", for the dark. A test checks that every screen fits the 320-command list.
+
+Decided from the rendered sheets (A3.3, `pc/golden/quest_{widgets,type,parts}_*`): the **16 px serif is the body** (titles, buttons, tabs); the **12 px serif is for secondary information only** (due dates, status line, agenda times, captions), where it is legible on the PC at 1:1 but small; whether it stays comfortable on the real LCD is judged at A4, and the fallback is the library's sans 12 for those lines. Contrast is checked by test (text 7:1, muted and the text on gold, wood and wax at least 4.5:1, in both palettes).
 
 ## Repository layout
 ```

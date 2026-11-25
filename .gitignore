@@ -4,6 +4,7 @@
 /server/*.db-*
 /firmware/build/
 /firmware/pc/build*/
+/firmware/tools/.venv/
 /firmware/sdkconfig
 /firmware/sdkconfig.old
 /firmware/managed_components/

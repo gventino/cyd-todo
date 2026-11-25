@@ -25,7 +25,10 @@ git clone --recurse-submodules https://github.com/gventino/cyd-todo.git
 ```
 
 ## Status of the plan
-A0 repository and contract (done) - A1 server device API (done, see `server/README.md`) - A2 server phone pages (done) - A3 model and UI on the PC - A4 Wi-Fi setup by QR - A5 network and sync - A6 polish and hardening - A7 TLS.
+A0 repository and contract (done) - A1 server device API (done, see `server/README.md`) - A2 server phone pages (done) - A3 model and UI on the PC (A3.1 model, A3.2 repository, A3.3 theme done) - A4 Wi-Fi setup by QR - A5 network and sync - A6 polish and hardening - A7 TLS.
 
 ## License
-MIT, see `LICENSE`. The serif font that will be bundled is under the SIL OFL (its license will be in `firmware/fonts/`).
+MIT, see `LICENSE`. The serif font that will be bundled is under the SIL OFL (its license is in `firmware/components/theme_quest/fonts/`).
+
+## Firmware, PC build
+Fonts are generated, and checked by `ci.sh`, with a venv: `python3 -m venv firmware/tools/.venv && firmware/tools/.venv/bin/pip install -r firmware/third_party/cydui/tools/requirements.txt`, then `firmware/tools/gen_fonts.sh [--check]`.
