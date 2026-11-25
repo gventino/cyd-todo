@@ -4,15 +4,15 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use poem::http::{Method, StatusCode};
-use poem::web::{Data, Path};
+use poem::web::{Data, Path, Query};
 use poem::{Body, Endpoint, EndpointExt, IntoResponse, Request, Response, Route, get, handler};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize};
 use subtle::ConstantTimeEq;
 
-use crate::db::{Db, NewQuest, QuestPatch, QuestState};
+use crate::db::{Db, EventPatch, NewEvent, NewQuest, QuestPatch, QuestState};
 use crate::http_error::ApiError;
-use crate::limits::{BODY_MAX, LIST_MAX};
+use crate::limits::{self, BODY_MAX, LIST_MAX};
 use crate::listing;
 
 /// Where access-log lines go (a closure, so a test can read them).
@@ -46,7 +46,10 @@ pub fn app(state: Arc<AppState>) -> impl Endpoint {
     let routes = Route::new()
         .at("/health", get(health))
         .at("/quests", get(list_quests).post(create_quest))
-        .at("/quests/:id", get(get_quest).patch(patch_quest).delete(delete_quest));
+        .at("/quests/:id", get(get_quest).patch(patch_quest).delete(delete_quest))
+        .at("/events", get(list_events).post(create_event))
+        .at("/events/:id", get(get_event).patch(patch_event).delete(delete_event))
+        .at("/changes", get(changes));
     routes.around(guard).data(state).catch_all_error(|err: poem::Error| async move {
         match err.downcast_ref::<ApiError>() {
             Some(api) => api.to_response(),
@@ -243,4 +246,114 @@ async fn patch_quest(
 async fn delete_quest(Data(state): Data<&Arc<AppState>>, Path(id): Path<String>) -> Result<Response, ApiError> {
     state.db.delete_quest(parse_id(&id)?).await?;
     Ok(no_content())
+}
+
+// ---- events ----
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EventIn {
+    title: String,
+    description: Option<String>,
+    start: i64,
+    end: i64,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+struct EventPatchIn {
+    #[serde(default, deserialize_with = "double_option")]
+    title: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
+    description: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
+    start: Option<Option<i64>>,
+    #[serde(default, deserialize_with = "double_option")]
+    end: Option<Option<i64>>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WindowQuery {
+    from: i64,
+    to: i64,
+}
+
+#[handler]
+async fn list_events(Data(state): Data<&Arc<AppState>>, Query(w): Query<WindowQuery>) -> Result<Response, ApiError> {
+    limits::window(w.from, w.to).map_err(ApiError::invalid)?;
+    let rev = state.db.rev().await?;
+    let mut rows = state.db.list_events(w.from, w.to, LIST_MAX as i64 + 1).await?;
+    let more = rows.len() > LIST_MAX;
+    rows.truncate(LIST_MAX);
+    let head = format!(r#""rev":{rev}"#);
+    Ok(raw_json(StatusCode::OK, listing::page(&head, "events", &rows, more)))
+}
+
+#[handler]
+async fn create_event(Data(state): Data<&Arc<AppState>>, body: Body) -> Result<Response, ApiError> {
+    let input: EventIn = read_json(body).await?;
+    let event = state
+        .db
+        .create_event(
+            NewEvent { title: input.title, description: input.description, start: input.start, end: input.end },
+            (state.clock)(),
+        )
+        .await?;
+    json(StatusCode::CREATED, &event)
+}
+
+#[handler]
+async fn get_event(Data(state): Data<&Arc<AppState>>, Path(id): Path<String>) -> Result<Response, ApiError> {
+    json(StatusCode::OK, &state.db.get_event(parse_id(&id)?).await?)
+}
+
+#[handler]
+async fn patch_event(
+    Data(state): Data<&Arc<AppState>>,
+    Path(id): Path<String>,
+    body: Body,
+) -> Result<Response, ApiError> {
+    let input: EventPatchIn = read_json(body).await?;
+    let patch = EventPatch {
+        title: not_null(input.title, "title cannot be null")?,
+        description: not_null(input.description, "description cannot be null")?,
+        start: not_null(input.start, "start cannot be null")?,
+        end: not_null(input.end, "end cannot be null")?,
+    };
+    json(StatusCode::OK, &state.db.update_event(parse_id(&id)?, patch, (state.clock)()).await?)
+}
+
+#[handler]
+async fn delete_event(Data(state): Data<&Arc<AppState>>, Path(id): Path<String>) -> Result<Response, ApiError> {
+    state.db.delete_event(parse_id(&id)?).await?;
+    Ok(no_content())
+}
+
+// ---- has anything changed? ----
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ChangesQuery {
+    since: Option<i64>,
+}
+
+#[handler]
+async fn changes(Data(state): Data<&Arc<AppState>>, Query(q): Query<ChangesQuery>) -> Result<Response, ApiError> {
+    let rev = state.db.rev().await?;
+    let changed = q.since != Some(rev);
+    Ok(raw_json(StatusCode::OK, format!(r#"{{"rev":{rev},"changed":{changed}}}"#).into_bytes()))
+}
+
+/// Runs the server on an acceptor until `shutdown` completes. `main` and the tests that talk to a real
+/// socket both come through here.
+pub async fn serve<A>(
+    acceptor: A,
+    state: Arc<AppState>,
+    shutdown: impl std::future::Future<Output = ()> + Send + 'static,
+) -> std::io::Result<()>
+where
+    A: poem::listener::Acceptor + 'static,
+{
+    poem::Server::new_with_acceptor(acceptor).run_with_graceful_shutdown(app(state), shutdown, None).await
 }
