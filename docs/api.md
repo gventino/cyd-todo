@@ -8,7 +8,8 @@ The server has two faces: a **device API** (JSON, for the CYD) and **phone pages
 - Base URL: the server's `PUBLIC_URL`, for example `http://192.168.1.50:8080` (at most 32 characters: it ends up in a QR code).
 - JSON in and out, UTF-8, `Content-Type: application/json`. Every response is small and has a `Content-Length` (no chunked replies: the board refuses to read what it cannot bound).
 - Times are **UTC epoch seconds** (integers). Calendar dates without a time (a quest's due date) are the string `"YYYY-MM-DD"` and mean that day in the user's own zone: the server never interprets them.
-- Ids are positive integers.
+- Ids are positive integers. A path id that is not one (`/quests/abc`, `0`, too big) names nothing and is a 404.
+- `PATCH` tells an absent member from `null`: `"due": null` clears the due date; `null` for any other member is a 400, and a `PATCH` that changes nothing (`{}`) is a 400. A response of `204` has no body and no `Content-Length`.
 - Text: valid UTF-8, no control characters except `\n` in notes and descriptions, lengths are **bytes**. The server rejects instead of truncating.
 - Errors: a JSON body `{"error": "<code>", "message": "<for a human>"}` and one of the statuses below. A message never contains what the client sent.
 
@@ -17,6 +18,7 @@ The server has two faces: a **device API** (JSON, for the CYD) and **phone pages
 | 400 | `bad_request` | not JSON, wrong type, unknown field, a bad query |
 | 401 | `unauthorized` | the Bearer token is missing or wrong (the same answer for both) |
 | 404 | `not_found` | no such id, or a one-time link that does not exist, was used or expired |
+| 405 | `method_not_allowed` | the path exists but not with that method |
 | 413 | `too_large` | the body is over the limit |
 | 422 | `invalid` | well-formed, but a rule is broken (a length, a range, `end <= start`) |
 | 429 | `too_many` | too many active one-time links |
@@ -97,4 +99,4 @@ A phone page is a second client of the same rules: it uses the same validation a
 | `BIND` | listen address, default `0.0.0.0:8080` |
 | `DATABASE_URL` | SQLite file, default `sqlite://cyd-todo.db` |
 | `TZ_OFFSET_MIN` | zone for phone forms without the script, default 0 |
-| `FAULT` | a fault-injection mode for tests of the firmware (`slow`, `truncate`, `huge`, `garbage`, `error500`); never set in real use, refused unless `ALLOW_FAULTS=1` |
+| `FAULT` | a fault-injection mode for tests of the firmware (`slow`, `truncate`, `huge`, `garbage`, `error500`); never set in real use, refused unless `ALLOW_FAULTS=1`. Parsed in A1, acted on in A5. |

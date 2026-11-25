@@ -51,10 +51,10 @@ Runs as an unprivileged user, a single SQLite file, migrations in code, backups 
 | Control | State |
 |---|---|
 | CT-16 HTTPS with a pinned certificate, never a token over plain HTTP | **Dev-only gap.** HTTP now; A7 closes it. |
-| CT-17 Response limits, timeouts, a JSON parser with a depth limit, validation, copy with limits | Designed (`api.md` limits, `design.md`); done at A1 (server side) and A5 (device side, fuzzed). |
+| CT-17 Response limits, timeouts, a JSON parser with a depth limit, validation, copy with limits | **Server side done (A1):** body, string, list and 14 KB response caps built while serializing, rules in one place, tests on both sides of every limit, worst-case bodies, `Content-Length` on a real socket. Device side at A5 (fuzzed). |
 | CT-18 Secrets in an encrypted NVS | **Later** (A7): the token and Wi-Fi password are in a plain NVS during development. |
 | CT-19 Secure Boot | Optional, release only; not planned for v0.1. |
-| CT-20 Logs never print user text or tokens | Designed; checked by a grep audit in `ci.sh` (A1 and A5). |
+| CT-20 Logs never print user text or tokens | **Server side done (A1):** the access log has method, a printable path, status and time only (tested with markers), errors never echo the client, `server/scripts/audit.sh` checks what may be logged. Firmware side at A5. |
 | CT-21 Backlight timeout and a privacy mode | A6. |
 | CT-22 Destructive actions need a confirmation | Done in the design: delete and Change Wi-Fi ask again (A3). |
 
