@@ -20,6 +20,7 @@ typedef struct {
     char text[4096];
     cydui_state state[64];
     uint32_t idset[1024];
+    uint64_t dirty[32]; /* one hash per strip: the screen sends only what changed, as the board does */
 } rig;
 
 /* Starts a rig with `theme` (copied). Returns 0 or a CYDUI_ERR_* flag. */

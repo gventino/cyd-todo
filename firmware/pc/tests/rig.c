@@ -33,6 +33,8 @@ uint32_t rig_start(rig *r, const cydui_theme *theme)
     cfg.state_mem_size = sizeof(r->state);
     cfg.idset_mem = r->idset;
     cfg.idset_mem_size = sizeof(r->idset);
+    cfg.core.dirty_mem = r->dirty;
+    cfg.core.dirty_mem_size = sizeof(r->dirty);
     cfg.theme = &r->theme;
     return cydui_ui_init(&r->ui, &cfg);
 }

@@ -60,6 +60,9 @@ boot
 ```
 Access point and station are never on together except for the instant of the trial. Setup can also be started from Settings, which erases nothing until the form is submitted successfully.
 
+## QR codes (A3.4)
+`firmware/components/qr` wraps Nayuki's C encoder (v1.8.0, MIT, vendored unmodified, checked by `ci.sh`). Error correction medium (raised when there is room), versions 1 to 5 (84 bytes at most); the contract URL of 61 bytes is version 4, 33 modules. A code is drawn as **one paper rectangle plus one A4 bitmap**: 4 px modules, a 4-module quiet zone, 164 px square for version 4 (13.4 KB of mask in a 16.2 KB buffer that the UI owns and reuses). Always dark on light, in both palettes. A new code in the same buffer is announced with `cydui_invalidate()` (findings 1 and 6). Every golden picture is **decoded by `zbarimg`** (`pc/tests/decode_qr.sh`) and compared with the text that was encoded; the test skips with a warning if no decoder is installed. Whether a phone reads it off the real LCD is judged at A4.
+
 ## Where things run
 - **UI task** owns the model and everything `cydui` (the library is not thread-safe, CT-11). It draws at most when something changed and sleeps otherwise (the library's dirty regions, `cydui_ui_end` returning false).
 - **Network task** owns Wi-Fi, SNTP and HTTP. It takes *requests* from a queue (`refresh quests`, `refresh events for [from, to)`, `complete quest id`, `delete id`, `new link kind`, `poll changes`) and posts *results* to another queue. It never touches the model or the UI. One request at a time, a 15 s timeout, a 16 KB response buffer that is never exceeded (the HTTP client is told the maximum and gives up the connection when the server says more).
