@@ -3,7 +3,7 @@
 /server/*.db
 /server/*.db-*
 /firmware/build/
-/firmware/pc/build/
+/firmware/pc/build*/
 /firmware/sdkconfig
 /firmware/sdkconfig.old
 /firmware/managed_components/
