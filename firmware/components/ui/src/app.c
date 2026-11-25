@@ -17,6 +17,7 @@ void todo_app_init(todo_app *a, todo_repo *repo, int off_min)
     a->repo = repo;
     a->off_min = off_min;
     a->palette = TODO_PALETTE_PARCHMENT;
+    a->backlight_index = 1; /* one minute */
     a->applied_palette = -1;
     snprintf(a->wifi_name, sizeof(a->wifi_name), "home-net");
     snprintf(a->server, sizeof(a->server), "192.168.1.50:8080");
@@ -77,9 +78,15 @@ static void on_result(todo_app *a, const todo_result *r)
     }
     if (r->offline) {
         a->link = TODO_LINK_OFFLINE;
+        if (r->kind == TODO_REQ_NEW_LINK && a->overlay == TODO_OV_QR) {
+            a->qr_failed = true;
+        }
         return;
     }
     if (!r->ok) {
+        if (r->kind == TODO_REQ_NEW_LINK && a->overlay == TODO_OV_QR) {
+            a->qr_failed = true;
+        }
         a->link = TODO_LINK_ERROR;
         if (r->kind == TODO_REQ_SET_QUEST_DONE || r->kind == TODO_REQ_DELETE_QUEST || r->kind == TODO_REQ_DELETE_EVENT) {
             fail(a, "Could not save");
@@ -95,6 +102,17 @@ static void on_result(todo_app *a, const todo_result *r)
     if (r->kind == TODO_REQ_POLL_CHANGES && r->changed) {
         app_want_quests(a);
         app_want_events(a);
+    }
+    if (r->kind == TODO_REQ_POLL_CHANGES && a->overlay == TODO_OV_QR && a->qr_ready && r->rev != a->qr_rev) {
+        a->overlay = TODO_OV_NONE; /* the phone saved something: the page has done its job */
+        app_toast(a, "Saved on your phone");
+        app_want_quests(a);
+        app_want_events(a);
+    }
+    if (r->kind == TODO_REQ_NEW_LINK && a->overlay == TODO_OV_QR) {
+        todo_copy(a->qr_url, sizeof(a->qr_url), r->url);
+        a->qr_url_pending = true;
+        a->qr_rev = r->rev;
     }
     if (r->kind == TODO_REQ_DELETE_QUEST || r->kind == TODO_REQ_DELETE_EVENT) {
         app_toast(a, "Deleted");
@@ -192,14 +210,20 @@ void todo_app_frame(todo_app *a, cydui_ui *ui)
     schedule(a);
 
     cydui_set_spacing(ui, 0);
-    cydui_tabs(ui, tabs, TODO_TAB_COUNT, &tab);
-    a->tab = (todo_tab)tab;
-    if (a->tab == TODO_TAB_QUESTS) {
-        screen_quests(a, ui);
-    } else if (a->tab == TODO_TAB_CALENDAR) {
-        screen_calendar(a, ui);
+    if (a->overlay == TODO_OV_QR || a->overlay == TODO_OV_SETUP) { /* a page of its own: no tabs behind it */
+        qr_page_frame(a, ui);
+    } else {
+        cydui_tabs(ui, tabs, TODO_TAB_COUNT, &tab);
+        a->tab = (todo_tab)tab;
+        if (a->tab == TODO_TAB_QUESTS) {
+            screen_quests(a, ui);
+        } else if (a->tab == TODO_TAB_CALENDAR) {
+            screen_calendar(a, ui);
+        } else {
+            screen_settings(a, ui);
+        }
+        overlays_frame(a, ui);
     }
-    overlays_frame(a, ui);
 
     todo_app_status_text(a, status, sizeof(status));
     ui_status_line(ui, a->palette, status);

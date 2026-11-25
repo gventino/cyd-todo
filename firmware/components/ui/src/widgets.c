@@ -292,3 +292,52 @@ void ui_wrapped(cydui_ui *ui, const cydui_font *f, cydui_color c, const char *s)
     r = cydui_alloc(ui, &m, w, e.h);
     cydui_draw_text(&ui->ctx, f, r.x, r.y, (int16_t)w, CYDUI_ALIGN_LEFT, s, CYDUI_NTS, c, 255);
 }
+
+int ui_setting_row(cydui_ui *ui, todo_palette pal, const char *label, const char *value, setting_mode mode)
+{
+    const todo_colors *k = todo_colors_of(pal);
+    cydui_mods mods;
+    cydui_id id_row, id_prev, id_next;
+    cydui_response rr, rp, rn;
+    cydui_rect r, prev, next;
+    int result = 0, vx;
+    cydui_text_extent e;
+
+    if (!cydui_widget_begin(ui)) {
+        return 0;
+    }
+    mods = cydui_take_mods(ui);
+    cydui_push_id_str(ui, label);
+    id_row = cydui_id_str(ui, "row");
+    id_prev = cydui_id_str(ui, "prev");
+    id_next = cydui_id_str(ui, "next");
+    cydui_id_claim(ui, id_row);
+    cydui_id_claim(ui, id_prev);
+    cydui_id_claim(ui, id_next);
+    r = cydui_alloc(ui, &mods, cydui_layout_avail(ui).w, 30);
+    r = rect_of(r.x + 6, r.y + 1, r.w - 12, 28);
+    next = rect_of(r.x + r.w - 38, r.y, 36, r.h);
+    prev = rect_of(r.x + r.w - 38 - 100 - 36, r.y, 36, r.h);
+
+    rr = cydui_interact(ui, id_row, r, mode == ROW_TAP ? CYDUI_SENSE_CLICK : CYDUI_DISABLED);
+    rp = cydui_interact(ui, id_prev, prev, mode == ROW_ARROWS ? CYDUI_SENSE_CLICK : CYDUI_DISABLED);
+    rn = cydui_interact(ui, id_next, next, mode == ROW_ARROWS ? CYDUI_SENSE_CLICK : CYDUI_DISABLED);
+
+    todo_paint_card(&ui->ctx, pal, r, false);
+    ui_text(ui, &todo_serif_16, r.x + 12, r.y + 5, label, k->text);
+    if (mode == ROW_ARROWS) {
+        arrow_button(ui, rect_of(prev.x + 4, prev.y + 2, 28, 24), "<", rp.pressed);
+        arrow_button(ui, rect_of(next.x + 4, next.y + 2, 28, 24), ">", rn.pressed);
+        e = cydui_text_size(&todo_serif_16, value, CYDUI_NTS, 0);
+        vx = prev.x + 36 + (100 - e.w) / 2;
+        ui_text(ui, &todo_serif_16, vx, r.y + 5, value, k->text);
+        result = rp.clicked ? -1 : (rn.clicked ? 1 : 0);
+    } else {
+        e = cydui_text_size(&todo_serif_16, value, CYDUI_NTS, 0);
+        todo_draw_text_ellipsis(&ui->ctx, &todo_serif_16, r.x + r.w - 12 - (e.w < r.w / 2 - 16 ? e.w : r.w / 2 - 16), r.y + 5, r.w / 2 - 16, value,
+                                mode == ROW_TAP ? k->gold_dark : k->muted);
+        result = rr.clicked ? 1 : 0;
+    }
+    cydui_pop_id(ui);
+    return result;
+}

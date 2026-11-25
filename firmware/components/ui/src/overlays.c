@@ -45,7 +45,7 @@ static void agenda(todo_app *a, cydui_ui *ui)
     const int64_t d0 = todo_local_midnight(a->cal_year, a->cal_month, a->cal_day, a->off_min);
     const int32_t due = todo_due_pack(a->cal_year, a->cal_month, a->cal_day);
     const int count = agenda_count(a, d0, due);
-    bool open = true, close = false;
+    bool open = true, close = false, add = false;
     int32_t first, last, i;
     todo_item_kind open_kind = TODO_ITEM_QUEST;
     int32_t open_id = 0;
@@ -89,12 +89,16 @@ static void agenda(todo_app *a, cydui_ui *ui)
         cydui_spacer(ui, 6);
         cydui_begin_row(ui);
         cydui_set_spacing(ui, 8);
+        cydui_next_width(ui, 130);
+        add = cydui_button(ui, "Add event");
         cydui_next_width(ui, 100);
         close = cydui_button(ui, "Close");
         cydui_end_row(ui);
         cydui_popup_end(ui);
     }
-    if (open_id) {
+    if (add) {
+        app_open_qr(a, TODO_LINK_EVENT);
+    } else if (open_id) {
         app_open_detail(a, open_kind, open_id, true);
     } else if (!open || close) {
         a->overlay = TODO_OV_NONE;
@@ -218,6 +222,35 @@ static void confirm(todo_app *a, cydui_ui *ui)
     }
 }
 
+/* ---- "Change Wi-Fi?" ---- */
+
+static void confirm_wifi(todo_app *a, cydui_ui *ui)
+{
+    const todo_colors *k = todo_colors_of(a->palette);
+    bool open = true, yes = false, no = false;
+
+    if (cydui_popup_begin(ui, "confirm-wifi", &open, 272, 168, CYDUI_POPUP_MODAL)) {
+        cydui_rect r = cydui_alloc_rect(ui, cydui_layout_avail(ui).w, 24);
+        ui_text(ui, &todo_serif_bold_16, r.x, r.y + 2, "Change the Wi-Fi?", k->text);
+        ui_wrapped(ui, &todo_serif_12, k->text, "The board opens its own network, and you join it from your phone to pick another one.");
+        ui_wrapped(ui, &todo_serif_12, k->muted, "Nothing is erased until the new one works.");
+        cydui_spacer(ui, 10);
+        cydui_begin_row(ui);
+        cydui_set_spacing(ui, 8);
+        cydui_next_width(ui, 100);
+        no = cydui_button(ui, "Cancel");
+        cydui_next_width(ui, 120);
+        yes = cydui_button(ui, "Continue");
+        cydui_end_row(ui);
+        cydui_popup_end(ui);
+    }
+    if (yes) {
+        todo_app_enter_setup(a, NULL, NULL, "", a->has_credentials || a->wifi_name[0] != '\0');
+    } else if (no || !open) {
+        a->overlay = TODO_OV_NONE;
+    }
+}
+
 void overlays_frame(todo_app *a, cydui_ui *ui)
 {
     switch (a->overlay) {
@@ -229,6 +262,9 @@ void overlays_frame(todo_app *a, cydui_ui *ui)
         break;
     case TODO_OV_CONFIRM:
         confirm(a, ui);
+        break;
+    case TODO_OV_CONFIRM_WIFI:
+        confirm_wifi(a, ui);
         break;
     default:
         break;

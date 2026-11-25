@@ -54,12 +54,27 @@ bool ui_wax_button(cydui_ui *ui, todo_palette pal, const char *label, int w, int
 int ui_month_header(cydui_ui *ui, todo_palette pal, int y, int m);
 bool ui_month_grid(cydui_ui *ui, todo_palette pal, int y, int m, uint32_t event_days, int today_day, int selected_day, int *tapped_day);
 bool ui_row_button(cydui_ui *ui, todo_palette pal, const char *title, const char *sub, bool muted);
+typedef enum { ROW_INFO, ROW_ARROWS, ROW_TAP } setting_mode;
+/* A line of the Settings tab; returns -1 / +1 for the arrows, 1 for a tap on a ROW_TAP, else 0. */
+int ui_setting_row(cydui_ui *ui, todo_palette pal, const char *label, const char *value, setting_mode mode);
 void ui_status_line(cydui_ui *ui, todo_palette pal, const char *text);
 void ui_toast(cydui_ui *ui, todo_palette pal, const char *text);
+
+/* settings.c: the tables behind the Settings tab */
+#define TZ_COUNT_MAX 40
+int tz_step(int off_min, int dir);                     /* the next zone east (dir > 0) or west, wrapping round */
+void tz_text(int off_min, char *out, size_t cap);      /* "UTC-03:00" */
+int backlight_count(void);
+const char *backlight_text(int index);                 /* "30 s", "1 min", "5 min", "Never" */
+
+/* qr_page.c */
+void app_open_qr(todo_app *a, todo_link_kind kind);
+void qr_page_frame(todo_app *a, cydui_ui *ui);
 
 /* screens */
 void screen_quests(todo_app *a, cydui_ui *ui);
 void screen_calendar(todo_app *a, cydui_ui *ui);
+void screen_settings(todo_app *a, cydui_ui *ui);
 void overlays_frame(todo_app *a, cydui_ui *ui); /* whatever popup or page is open */
 
 #endif /* TODO_UI_INTERNAL_H */

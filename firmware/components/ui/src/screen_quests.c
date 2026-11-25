@@ -48,7 +48,7 @@ void screen_quests(todo_app *a, cydui_ui *ui)
     cydui_next_width(ui, 96);
     cydui_next_height(ui, 28);
     if (cydui_button(ui, "New quest")) {
-        a->overlay = TODO_OV_NONE; /* the QR page comes with step 3 */
+        app_open_qr(a, TODO_LINK_QUEST);
     }
     cydui_end_row(ui);
 

@@ -317,7 +317,7 @@ static void test_the_arrows_change_the_month_and_ask_for_its_events(void)
     open_calendar(TODO_PALETTE_PARCHMENT);
     world_tap(&W, day_x(3), day_y(3));
     world_frames(&W, 3);
-    world_tap(&W, 68, 203); /* the agenda's Close */
+    world_tap(&W, 202, 203); /* the agenda's Close, right of Add event */
     world_frames(&W, 3);
     TEST_ASSERT_EQUAL_INT(TODO_OV_NONE, W.app.overlay);
     TEST_ASSERT_EQUAL_INT(3, W.app.cal_day);
@@ -505,6 +505,273 @@ static void test_the_longest_texts_fit_the_detail_and_scroll(void)
     snap("detail_longest", TODO_PALETTE_PARCHMENT);
 }
 
+/* ---- settings, the QR pages and the setup ---- */
+
+#define TAB_SETTINGS_X 267
+#define NEW_QUEST_X 264
+#define NEW_QUEST_Y 48
+
+#define QR_BUTTON_X 242
+#define QR_BUTTON_Y 130
+#define CONFIRM_WIFI_CANCEL_X 80
+#define CONFIRM_WIFI_CONTINUE_X 202
+#define CONFIRM_WIFI_Y 133
+
+static void open_settings(todo_palette p)
+{
+    world_start(&W, p, true);
+    world_frames(&W, 6);
+    world_tap(&W, TAB_SETTINGS_X, TAB_Y);
+    world_frames(&W, 8);
+    TEST_ASSERT_EQUAL_INT(TODO_TAB_SETTINGS, W.app.tab);
+    TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+}
+
+static void test_settings_in_both_palettes(void)
+{
+    int p;
+    for (p = 0; p < TODO_PALETTE_COUNT; p++) {
+        open_settings((todo_palette)p);
+        snap("settings", (todo_palette)p);
+    }
+}
+
+static void test_the_zone_arrows_move_the_zone_and_the_window_of_events(void)
+{
+    int64_t from;
+    open_settings(TODO_PALETTE_PARCHMENT);
+    from = W.app.store.events_from;
+    world_tap(&W, 294, 110);
+    world_frames(&W, 6);
+    TEST_ASSERT_EQUAL_INT(-120, W.app.off_min);
+    TEST_ASSERT_TRUE_MESSAGE(W.app.store.events_from < from, "the window moved with the zone");
+    world_tap(&W, 158, 110);
+    world_tap(&W, 158, 110);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(-210, W.app.off_min);
+    TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+}
+
+static void test_the_backlight_timeout_wraps_round(void)
+{
+    open_settings(TODO_PALETTE_PARCHMENT);
+    TEST_ASSERT_EQUAL_INT(1, W.app.backlight_index);
+    world_tap(&W, 294, 140);
+    world_tap(&W, 294, 140);
+    world_frames(&W, 2);
+    TEST_ASSERT_EQUAL_INT(3, W.app.backlight_index);
+    world_tap(&W, 294, 140);
+    world_frames(&W, 2);
+    TEST_ASSERT_EQUAL_INT(0, W.app.backlight_index);
+    world_tap(&W, 158, 140);
+    world_frames(&W, 2);
+    TEST_ASSERT_EQUAL_INT(3, W.app.backlight_index);
+}
+
+static void test_the_theme_row_switches_the_palette_live(void)
+{
+    uint64_t day;
+    open_settings(TODO_PALETTE_PARCHMENT);
+    day = cydui_mem_hash(&W.r.mem);
+    world_tap(&W, 160, 170);
+    world_frames(&W, 12);
+    TEST_ASSERT_EQUAL_INT(TODO_PALETTE_CANDLELIGHT, W.app.palette);
+    TEST_ASSERT_EQUAL_INT((int)TODO_PALETTE_CANDLELIGHT, W.app.applied_palette);
+    TEST_ASSERT_NOT_EQUAL(day, cydui_mem_hash(&W.r.mem));
+    TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+    snap("settings_night_switched", TODO_PALETTE_CANDLELIGHT);
+    world_tap(&W, 160, 170);
+    world_frames(&W, 12);
+    TEST_ASSERT_EQUAL_INT(TODO_PALETTE_PARCHMENT, W.app.palette);
+}
+
+static void test_change_wifi_asks_first_and_then_opens_the_setup_page(void)
+{
+    int p;
+    for (p = 0; p < TODO_PALETTE_COUNT; p++) {
+        open_settings((todo_palette)p);
+        todo_app_set_ap(&W.app, "cyd-todo-4F2A", "k7Qm29xT");
+        world_tap(&W, 160, 200);
+        world_frames(&W, 4);
+        TEST_ASSERT_EQUAL_INT(TODO_OV_CONFIRM_WIFI, W.app.overlay);
+        snap("confirm_wifi", (todo_palette)p);
+        world_tap(&W, CONFIRM_WIFI_CANCEL_X, CONFIRM_WIFI_Y);
+        world_frames(&W, 3);
+        TEST_ASSERT_EQUAL_INT(TODO_OV_NONE, W.app.overlay);
+        world_tap(&W, 160, 200);
+        world_frames(&W, 4);
+        world_tap(&W, CONFIRM_WIFI_CONTINUE_X, CONFIRM_WIFI_Y);
+        world_frames(&W, 4);
+        TEST_ASSERT_EQUAL_INT(TODO_OV_SETUP, W.app.overlay);
+        TEST_ASSERT_EQUAL_STRING("WIFI:T:WPA;S:cyd-todo-4F2A;P:k7Qm29xT;;", W.app.qr_text);
+        TEST_ASSERT_TRUE(W.app.has_credentials);
+        TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+        snap("setup_from_settings", (todo_palette)p);
+    }
+}
+
+static void test_the_setup_page_shows_why_and_swaps_between_the_wifi_code_and_the_address(void)
+{
+    int p;
+    for (p = 0; p < TODO_PALETTE_COUNT; p++) {
+        world_start(&W, (todo_palette)p, true);
+        world_frames(&W, 6);
+        todo_app_enter_setup(&W.app, "cyd-todo-4F2A", "k7Qm29xT", "Could not join home-net", false);
+        world_frames(&W, 4);
+        TEST_ASSERT_EQUAL_STRING("WIFI:T:WPA;S:cyd-todo-4F2A;P:k7Qm29xT;;", W.app.qr_text);
+        snap("setup", (todo_palette)p);
+        world_tap(&W, QR_BUTTON_X, QR_BUTTON_Y);
+        world_frames(&W, 4);
+        TEST_ASSERT_EQUAL_STRING("http://192.168.4.1", W.app.qr_text);
+        snap("setup_address", (todo_palette)p);
+        world_tap(&W, QR_BUTTON_X, QR_BUTTON_Y);
+        world_frames(&W, 4);
+        TEST_ASSERT_EQUAL_STRING("WIFI:T:WPA;S:cyd-todo-4F2A;P:k7Qm29xT;;", W.app.qr_text);
+        TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+    }
+}
+
+static void test_without_a_network_the_setup_page_cannot_be_cancelled(void)
+{
+    world_start(&W, TODO_PALETTE_PARCHMENT, true);
+    world_frames(&W, 6);
+    todo_app_enter_setup(&W.app, "cyd-todo-4F2A", "k7Qm29xT", "", false);
+    world_frames(&W, 4);
+    world_tap(&W, QR_BUTTON_X, 152); /* where Cancel would be */
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_SETUP, W.app.overlay);
+    todo_app_enter_setup(&W.app, "cyd-todo-4F2A", "k7Qm29xT", "", true);
+    world_frames(&W, 4);
+    world_tap(&W, QR_BUTTON_X, 152);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(TODO_OV_NONE, W.app.overlay, "with a network to go back to, Cancel is there");
+}
+
+static void test_the_setup_window_closes_after_ten_minutes_and_can_be_reopened(void)
+{
+    world_start(&W, TODO_PALETTE_PARCHMENT, true);
+    world_frames(&W, 6);
+    todo_app_enter_setup(&W.app, "cyd-todo-4F2A", "k7Qm29xT", "", false);
+    world_frames(&W, 4);
+    rig_advance(&W.r, 590000);
+    world_frames(&W, 3);
+    TEST_ASSERT_TRUE_MESSAGE(W.app.qr.size > 0, "the code is still there after 9 minutes and 50 seconds");
+    rig_advance(&W.r, 11000);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_SETUP, W.app.overlay);
+    snap("setup_timed_out", TODO_PALETTE_PARCHMENT);
+    world_tap(&W, 160, 146);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_SETUP, W.app.overlay);
+    TEST_ASSERT_TRUE_MESSAGE(W.app.qr.size > 0, "the code is back");
+    snap("setup_again", TODO_PALETTE_PARCHMENT);
+}
+
+static void open_new_quest_page(void)
+{
+    world_start(&W, TODO_PALETTE_PARCHMENT, true);
+    world_frames(&W, 6);
+    world_tap(&W, NEW_QUEST_X, NEW_QUEST_Y);
+    world_frames(&W, 6);
+}
+
+static void test_new_quest_asks_for_a_link_and_shows_it_as_a_code(void)
+{
+    open_new_quest_page();
+    TEST_ASSERT_EQUAL_INT(TODO_OV_QR, W.app.overlay);
+    TEST_ASSERT_EQUAL_INT(TODO_LINK_QUEST, W.app.qr_kind);
+    TEST_ASSERT_TRUE(W.app.qr_ready);
+    TEST_ASSERT_EQUAL_STRING("http://192.168.1.50:8080/m/00000000000000000000000001", W.app.qr_text);
+    TEST_ASSERT_TRUE(W.app.qr.size > 0);
+    TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+    snap("qr_quest", TODO_PALETTE_PARCHMENT);
+}
+
+static void test_the_page_closes_by_itself_when_the_phone_saves_something(void)
+{
+    open_new_quest_page();
+    world_frames(&W, 100); /* a few polls with nothing changed */
+    TEST_ASSERT_EQUAL_INT(TODO_OV_QR, W.app.overlay);
+    todo_memrepo_add_quest(&W.mem, "Written on the phone", "", 2, 0);
+    world_frames(&W, 260); /* the next poll comes within 3 seconds */
+    TEST_ASSERT_EQUAL_INT(TODO_OV_NONE, W.app.overlay);
+    TEST_ASSERT_EQUAL_STRING("Saved on your phone", W.app.toast);
+    world_frames(&W, 10);
+    TEST_ASSERT_EQUAL_INT(7, W.app.store.n_quests);
+}
+
+static void test_the_link_expires_after_ten_minutes(void)
+{
+    open_new_quest_page();
+    rig_advance(&W.r, 590000);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(TODO_OV_QR, W.app.overlay, "still valid after 9 minutes and 50 seconds");
+    rig_advance(&W.r, 11000);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_NONE, W.app.overlay);
+    TEST_ASSERT_EQUAL_STRING("Link expired", W.app.toast);
+}
+
+static void test_cancel_leaves_the_page_and_a_second_link_is_a_new_picture(void)
+{
+    uint64_t first, second;
+    char first_text[96];
+    open_new_quest_page();
+    first = cydui_mem_hash(&W.r.mem);
+    snprintf(first_text, sizeof(first_text), "%s", W.app.qr_text);
+    world_tap(&W, QR_BUTTON_X, QR_BUTTON_Y);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_NONE, W.app.overlay);
+    world_tap(&W, NEW_QUEST_X, NEW_QUEST_Y);
+    world_frames(&W, 6);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_QR, W.app.overlay);
+    second = cydui_mem_hash(&W.r.mem);
+    TEST_ASSERT_NOT_EQUAL(0, strcmp(first_text, W.app.qr_text));
+    TEST_ASSERT_NOT_EQUAL_MESSAGE(first, second, "the new code is on the screen, not the old one (finding 1)");
+}
+
+static void test_a_refused_link_says_so_and_retry_asks_again(void)
+{
+    world_start(&W, TODO_PALETTE_PARCHMENT, true);
+    world_frames(&W, 6);
+    W.mem.fail_next = 1;
+    world_tap(&W, NEW_QUEST_X, NEW_QUEST_Y);
+    world_frames(&W, 6);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_QR, W.app.overlay);
+    TEST_ASSERT_TRUE(W.app.qr_failed);
+    TEST_ASSERT_FALSE(W.app.qr_ready);
+    TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+    snap("qr_failed", TODO_PALETTE_PARCHMENT);
+    world_tap(&W, QR_BUTTON_X, 82); /* Retry is above Cancel */
+    world_frames(&W, 6);
+    TEST_ASSERT_TRUE_MESSAGE(W.app.qr_ready, "the second ask worked");
+    TEST_ASSERT_FALSE(W.app.qr_failed);
+}
+
+static void test_offline_is_told_apart_on_the_link_page(void)
+{
+    world_start(&W, TODO_PALETTE_PARCHMENT, true);
+    world_frames(&W, 6);
+    W.mem.offline = true;
+    world_tap(&W, NEW_QUEST_X, NEW_QUEST_Y);
+    world_frames(&W, 6);
+    TEST_ASSERT_TRUE(W.app.qr_failed);
+    TEST_ASSERT_EQUAL_INT(TODO_LINK_OFFLINE, W.app.link);
+    snap("qr_offline", TODO_PALETTE_PARCHMENT);
+}
+
+static void test_add_event_in_the_agenda_opens_the_event_link_page(void)
+{
+    open_agenda_of_the_3rd();
+    world_tap(&W, 79, 203); /* Add event */
+    world_frames(&W, 6);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_QR, W.app.overlay);
+    TEST_ASSERT_EQUAL_INT(TODO_LINK_EVENT, W.app.qr_kind);
+    TEST_ASSERT_TRUE(W.app.qr_ready);
+    snap("qr_event", TODO_PALETTE_CANDLELIGHT);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -531,6 +798,21 @@ int main(void)
     RUN_TEST(test_the_confirm_popup_cannot_be_dismissed_by_a_tap_outside);
     RUN_TEST(test_a_quest_title_opens_its_detail_and_delete_removes_it);
     RUN_TEST(test_a_detail_whose_item_was_deleted_elsewhere_closes_by_itself);
+    RUN_TEST(test_settings_in_both_palettes);
+    RUN_TEST(test_the_zone_arrows_move_the_zone_and_the_window_of_events);
+    RUN_TEST(test_the_backlight_timeout_wraps_round);
+    RUN_TEST(test_the_theme_row_switches_the_palette_live);
+    RUN_TEST(test_change_wifi_asks_first_and_then_opens_the_setup_page);
+    RUN_TEST(test_the_setup_page_shows_why_and_swaps_between_the_wifi_code_and_the_address);
+    RUN_TEST(test_without_a_network_the_setup_page_cannot_be_cancelled);
+    RUN_TEST(test_the_setup_window_closes_after_ten_minutes_and_can_be_reopened);
+    RUN_TEST(test_new_quest_asks_for_a_link_and_shows_it_as_a_code);
+    RUN_TEST(test_the_page_closes_by_itself_when_the_phone_saves_something);
+    RUN_TEST(test_the_link_expires_after_ten_minutes);
+    RUN_TEST(test_cancel_leaves_the_page_and_a_second_link_is_a_new_picture);
+    RUN_TEST(test_a_refused_link_says_so_and_retry_asks_again);
+    RUN_TEST(test_offline_is_told_apart_on_the_link_page);
+    RUN_TEST(test_add_event_in_the_agenda_opens_the_event_link_page);
     RUN_TEST(test_the_longest_texts_fit_the_detail_and_scroll);
     return UNITY_END();
 }

@@ -81,6 +81,9 @@ typedef struct {
     bool qr_ready, qr_failed;
     uint32_t qr_since;
     int64_t qr_rev; /* the revision when the page opened: a different one means the phone saved something */
+    char qr_text[96]; /* what the code on screen encodes (empty: none) */
+    char qr_url[TODO_LINK_URL_MAX + 1]; /* a link that arrived and is not yet a code */
+    bool qr_url_pending;
     char ssid[33], password[64], reason[48];
     bool has_credentials, setup_address;
     char wifi_name[33], server[33]; /* what Settings shows */
@@ -104,6 +107,9 @@ void todo_app_set_time(todo_app *a, int64_t epoch, bool valid);
 
 /* Builds one frame: between cydui_ui_begin and cydui_ui_end. Polls the repository (a few answers at most). */
 void todo_app_frame(todo_app *a, cydui_ui *ui);
+
+/* The network the board opens for the setup (the board makes the name and the password; see design.md). */
+void todo_app_set_ap(todo_app *a, const char *ssid, const char *password);
 
 /* Starts the Wi-Fi setup page (what the board does when it has no network). `reason` may be NULL or "". */
 void todo_app_enter_setup(todo_app *a, const char *ssid, const char *password, const char *reason, bool has_credentials);

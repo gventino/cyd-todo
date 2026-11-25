@@ -166,6 +166,39 @@ static void test_counting_the_quests_due_on_a_day(void)
     TEST_ASSERT_EQUAL_INT(0, quests_due_on(&s, 20261206));
 }
 
+static void test_the_zone_list_steps_east_and_west_and_wraps_round(void)
+{
+    TEST_ASSERT_EQUAL_INT(-120, tz_step(-180, 1));
+    TEST_ASSERT_EQUAL_INT(-210, tz_step(-180, -1));
+    TEST_ASSERT_EQUAL_INT(345, tz_step(330, 1));
+    TEST_ASSERT_EQUAL_INT(330, tz_step(345, -1));
+    TEST_ASSERT_EQUAL_INT(-720, tz_step(840, 1));
+    TEST_ASSERT_EQUAL_INT(840, tz_step(-720, -1));
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, tz_step(-30, 1), "a value that is not in the list goes to the next one");
+    TEST_ASSERT_EQUAL_INT(-60, tz_step(-30, -1));
+    for (int z = -720; z <= 840; z++) { /* walking east visits strictly increasing zones until it wraps */
+        int n = tz_step(z, 1);
+        TEST_ASSERT_TRUE(n > z || n == -720);
+    }
+}
+
+static void test_a_zone_is_written_as_utc_with_hours_and_minutes(void)
+{
+    char s[16];
+    tz_text(-180, s, sizeof(s));
+    TEST_ASSERT_EQUAL_STRING("UTC-03:00", s);
+    tz_text(330, s, sizeof(s));
+    TEST_ASSERT_EQUAL_STRING("UTC+05:30", s);
+    tz_text(0, s, sizeof(s));
+    TEST_ASSERT_EQUAL_STRING("UTC+00:00", s);
+    tz_text(-570, s, sizeof(s));
+    TEST_ASSERT_EQUAL_STRING("UTC-09:30", s);
+    TEST_ASSERT_EQUAL_STRING("1 min", backlight_text(1));
+    TEST_ASSERT_EQUAL_STRING("Never", backlight_text(backlight_count() - 1));
+    TEST_ASSERT_EQUAL_STRING("?", backlight_text(-1));
+    TEST_ASSERT_EQUAL_STRING("?", backlight_text(backlight_count()));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -178,5 +211,7 @@ int main(void)
     RUN_TEST(test_an_event_says_when_in_the_words_of_the_design);
     RUN_TEST(test_days_and_instants_are_written_with_names);
     RUN_TEST(test_counting_the_quests_due_on_a_day);
+    RUN_TEST(test_the_zone_list_steps_east_and_west_and_wraps_round);
+    RUN_TEST(test_a_zone_is_written_as_utc_with_hours_and_minutes);
     return UNITY_END();
 }
