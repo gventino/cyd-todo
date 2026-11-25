@@ -1,63 +1,94 @@
-# Threat model (short STRIDE)
+# Design
 
-The setting is `cydui`'s own (docs 04 to 06 of the library): a home device on a LAN that guests can join, on a desk other people can touch. This page covers what this application adds: the board's setup access point, HTTP to the server, the server, and the phone pages. The library's own threats (memory safety, UTF-8, input floods) are in the library's docs and tests.
+cyd-todo is a quest log and a calendar for the ESP32 "Cheap Yellow Display" (320x240, resistive touch, no PSRAM), with a small server at home. It is also the real application that `cydui` needs before 1.0.0: everything the library gets in the way of is written in `findings.md`.
 
-> **Status: development only.** The transport is plain HTTP on purpose, to get the application working first. **Do not put real data in it and do not expose the server outside the LAN until step A7 (TLS) is done.** This is a known, accepted gap of the development phase, not a decision about the final product.
+Nothing is typed on the display. Wi-Fi is set up from a phone by scanning a QR code, and quests and events are entered on the phone through a page of the server, again behind a QR code. The display is for looking and for taps that need no keyboard.
 
-## Assets
-A1 the quests and events (private life); A2 the device token and the Wi-Fi password; A3 the integrity of what the screen shows (a forged quest or event); A4 the board and the server staying up.
+## What it holds
+- **Quest**: title (1..64 bytes), notes (0..256), difficulty 1..5, optional due date, state open/done. Done gives **XP**: `difficulty * 10`.
+- **Event**: title (1..64), start and end (UTC epoch seconds, end after start, at most 31 days long), description (0..256).
+- Limits are the ones in `api.md`; the firmware's fixed arrays have the same sizes.
 
-## Boundaries
+## Levels (integer math)
+Total XP needed to *reach* level `L` (L >= 1) is `50 * L * (L - 1)`: level 1 at 0 XP, 2 at 100, 3 at 300, 4 at 600, 5 at 1000. From `xp` the device finds `L` by a loop (no square root) and shows `xp - need(L)` over `need(L+1) - need(L)` as a bar. A quest of difficulty 5 is 50 XP, so level 2 is two of them.
+
+## Screens (320 x 240)
+Three tabs at the top (parchment on dark wood): **Quests**, **Calendar**, **Settings**. A thin status line at the bottom: `Synced 12:04`, `Offline`, `Waiting for time`, or an error.
+
+![Quests](img/quests-day.png) ![Calendar](img/calendar-day.png)
+![Agenda](img/agenda-day.png) ![Quest details](img/detail-day.png)
+![Settings](img/settings-night.png) ![New quest](img/qr-quest-day.png) ![Wi-Fi setup](img/setup-day.png)
+
+*(Rendered by `firmware/tools/shots.sh`; the sketches of the first plan became these screens. Every one of them has a golden hash in `firmware/pc/golden/`.)*
+- A **quest card** is a row at least 32 px tall (touch target): a checkbox (tap to complete, with a short animation and the XP gained), the title, stars for the difficulty, the due date. Tapping the title opens a popup with the notes and a *Delete* button; delete asks again (a confirmation popup, CT-22). Done quests are faded and sit below the open ones.
+- **New quest** (header of the Quests tab) and **Add event** (in the agenda) open the **QR page**: not a popup but a page of its own, because the code is 164 px of the 240. The code on the left; on the right the title, a line of instruction, the time the link has left and **Cancel**. The board asks `POST /link` first (`Preparing...`; on failure the page says why and offers **Retry**), asks `GET /changes` every 3 seconds while it is open, and closes by itself with a toast `Saved on your phone` when the revision moves (and for good after 10 minutes, with `Link expired`).
+- **Calendar**: month grid (Monday first, as many rows as the month needs: 4 to 6), days with events marked by a small square, today ringed, the selected day filled; a line under it says what the selected day holds. **Tapping a day opens its agenda as a popup** (the 192 px under the tabs cannot hold a grid and a list): the events of the day in order (`10:00-10:45`; `22:00 until Thu 01:30`, `Until 01:30`, `All day`) and the quests due that day, **Add event** and **Close**. Tapping an item opens its **detail** (full title, notes or the start and end, **Delete** in wax, then a modal **confirmation**: two taps, and the server answers last). `<` and `>` change month and ask for that month's events (the month and a week on either side).
+- **Settings**: rows for the Wi-Fi network and the server address (shown), **Time zone** and **Backlight** (arrows through a list), **Theme** (Day / Night, switched live) and **Change Wi-Fi** (asks first, then the setup page). The version is in the status line.
+
+## Wi-Fi setup by QR
+The board decides at boot:
+
 ```
- [phone] --Wi-Fi AP--> (P1 board: setup page) --NVS--> [flash]
- [board] --LAN HTTP--> (P2 server: device API) --> [SQLite]
- [phone] --LAN HTTP--> (P3 server: phone pages) --> [SQLite]
- [anyone on the LAN] -----> P2, P3 (they can be reached, so they must refuse)
+boot
+ |
+ +-- credentials in NVS? --no--> SETUP
+ |         |yes
+ |         v
+ |   connect (up to 3 tries, 15 s each) --ok--> NORMAL (no QR at all)
+ |         |fail
+ |         v
+ |   SETUP, with the message "Could not join <ssid>"
+ |
+ SETUP: open an access point "cyd-todo-XXXX" (WPA2, a random 8-character password), show the Wi-Fi QR
+        WIFI:T:WPA;S:cyd-todo-XXXX;P:<password>;;   and the text of the steps.
+        Phone joins -> the captive portal opens the form (or the address 192.168.4.1 by hand, shown on
+        screen as text and as a second QR).
+        Form: network (a list the board scanned), password, server address, device token -> POST.
+        The board validates, stores in NVS, stops the access point, tries to join:
+          ok    -> NORMAL, the QR is gone; the form tells the phone it worked.
+          fail  -> back to SETUP with the reason on screen and in the form.
+        The window closes after 10 minutes (the QR is replaced by "Setup timed out. Tap to try again").
 ```
+Access point and station are never on together except for the instant of the trial. Setup can also be started from Settings, which erases nothing until the form is submitted successfully.
 
-## P1 - Setup mode on the board (access point, DNS, tiny HTTP server)
-| STRIDE | Threat | What the design does |
-|---|---|---|
-| S | Someone joins the setup access point first and submits their own server address. | The access point has a random WPA2 password that is only in the QR on the board's own screen; one client at a time; the window is 10 minutes; the board shows the address it was given on screen before it is used for the first call. Someone who can see the QR is already in the room. |
-| T | A hostile form (long fields, odd bytes, a huge POST) corrupts memory or hangs the board. | Body cap (1 KB), every field has a length and a character rule, parsed by code that is fuzzed on the PC (A4); anything else is a 400. The HTTP server runs only in setup mode. |
-| I | Eavesdropping on the setup page (it is HTTP): the Wi-Fi password and the token cross the air once. | The access point is WPA2, so the link is encrypted for everyone who does not know the QR; accepted for a 10-minute window. A7 does not change this (a captive portal cannot have a valid certificate), the answer is the short window and the random password. |
-| D | Holding the setup mode open, or a loop of wrong submissions, keeps the board from working. | The window closes by itself; the previous credentials are kept until a new set joins successfully; setup mode is only entered at boot without working credentials or from Settings with a confirmation. |
-| E | A reflash over USB (physical access) reads the NVS. | Out of scope without secure boot and flash encryption; A7 puts the token and the password in an encrypted NVS partition for a release build (CT-18). |
+## QR codes (A3.4)
+`firmware/components/qr` wraps Nayuki's C encoder (v1.8.0, MIT, vendored unmodified, checked by `ci.sh`). Error correction medium (raised when there is room), versions 1 to 5 (84 bytes at most); the contract URL of 61 bytes is version 4, 33 modules. A code is drawn as **one paper rectangle plus one A4 bitmap**: 4 px modules, a 4-module quiet zone, 164 px square for version 4 (13.4 KB of mask in a 16.2 KB buffer that the UI owns and reuses). Always dark on light, in both palettes. A new code in the same buffer is announced with `cydui_invalidate()` (findings 1 and 6). Every golden picture is **decoded by `zbarimg`** (`pc/tests/decode_qr.sh`) and compared with the text that was encoded; the test skips with a warning if no decoder is installed. Whether a phone reads it off the real LCD is judged at A4.
 
-## P2 - Device API (board to server)
-| STRIDE | Threat | What the design does |
-|---|---|---|
-| S | Someone on the LAN calls the API, or answers the board in the server's place. | Bearer token on every call (constant-time compare, at least 32 characters, never in a log or URL). **Plain HTTP means the token and every answer are readable and forgeable on the LAN: dev-only gap, closed by A7 (HTTPS with the server certificate pinned in the firmware).** |
-| T | A tampered answer (too long, truncated, bad JSON, strings over the limit) reaches the model. | The firmware reads at most 16 KB and gives up the connection on more; a non-allocating JSON reader with a depth limit and per-string caps; every field is copied with its limit (CT-02); the reader is fuzzed (A5). The fault-injection mode of the server proves it. |
-| R | No audit trail. | Accepted; a home device. The server logs method, path and status (no bodies, no token). |
-| I | A quest title in a log line, a token in a URL. | Logs carry no user text (the library's CT-20 rule, applied here). |
-| D | A slow or silent server blocks the UI; a flood of polls. | One request at a time in the network task, a 15 s timeout, backoff on failure, the UI task never waits for the network; the server limits bodies (4 KB) and links (6 active). |
-| E | A bug in the server's parser. | Rust, no `unsafe`, `sqlx` with bound parameters only (no string-built SQL). |
+## Where things run
+- **UI task** owns the model and everything `cydui` (the library is not thread-safe, CT-11). It draws at most when something changed and sleeps otherwise (the library's dirty regions, `cydui_ui_end` returning false).
+- **Network task** owns Wi-Fi, SNTP and HTTP. It takes *requests* from a queue (`refresh quests`, `refresh events for [from, to)`, `complete quest id`, `delete id`, `new link kind`, `poll changes`) and posts *results* to another queue. It never touches the model or the UI. One request at a time, a 15 s timeout, a 16 KB response buffer that is never exceeded (the HTTP client is told the maximum and gives up the connection when the server says more).
+- **Provisioning** (setup mode) has its own tiny HTTP server and a DNS answerer while it lasts, and none of the above runs then.
 
-## P3 - Phone pages (the server's web face) - built in A2, with the evidence
-| STRIDE | Threat | What was built | Evidence |
-|---|---|---|---|
-| S | Guessing, stealing or reusing a one-time link. | 128 random bits from the OS, stored only as a SHA-256; single use by one atomic `UPDATE ... RETURNING`; 10 minutes; at most 6 alive; every failure is the same 404 page after the same 200 ms; the code never reaches the log (`/m/:code`) or any page. **HTTP: anyone sniffing the LAN while the link is used can take the session; dev-only gap, A7.** | `tests/links.rs` (lifecycle, identical failures, expiry to the second, the cap, log redaction, only hashes in the database) |
-| S | A session that outlives its use. | 30 minutes from creation (not sliding), cookie `HttpOnly; SameSite=Strict; Path=/` (+ `Secure` with https), ended by *Leave*; a phone session is not a device token and the reverse. | `tests/links.rs` |
-| T | Cross-site request forgery. | Every state change is a POST with the session's CSRF token (constant time) **and** an `Origin` that must be ours when present, on top of `SameSite=Strict`; a GET never writes; delete is two steps. | `tests/links.rs`, `pages_quests.rs`, `pages_events.rs` (every POST of every page, with a wrong token, a foreign Origin and no session) |
-| T | **Stored cross-site scripting.** | Markup is built only through `html::Html`: text and attribute values are escaped by construction, literals are `'static`; the audit forbids markup in `format!`, raw pushes and `Html(..)` in `pages/`. **No script exists on any page** and the CSP allows none (`default-src 'none'`, the one stylesheet by hash), so a missed escape still cannot run code. | `src/html.rs` tests (5000 random strings), `tests/pages_security.rs`: 22 hostile strings in every field and context (device API and forms, accepted and refused), **every page that can show them**, checked against an allowlist of tags, attributes and link targets (the checker is itself tested on bad pages); mutations that drop the escaping fail 2 to 3 tests |
-| I | Leaking data to other sites or into history. | `Referrer-Policy: no-referrer`, no third-party resources, no cookies but the session, `Cache-Control: no-store`; nothing from the URL or the headers is echoed into a page. | `tests/pages_security.rs` (reflection test) |
-| D | Huge forms, floods, a table that fills. | Form body at most 4096 bytes, at most 6 links alive and expired rows swept, the same 48-item caps; one validation function for both faces. | `tests/links.rs`, `pages_*.rs` |
-| E | A page that can do more than the API. | It cannot: the same validators and database functions. | the tests above |
+## Sync
+Server is the truth. The board keeps a small cache in RAM: every open quest (up to 48) and the events of the month on screen plus a week on either side (up to 48). It refreshes:
+- when a tab or month is opened, after a tap that changed something, and when `GET /changes` says the revision moved;
+- every 60 s while idle (a single ~30-byte call), every 3 s while a QR is on the screen.
+A tap (complete, delete) is applied on the screen at once and sent; if the request fails the card goes back and the status line says so. No offline queue in v1: offline, the board shows what it has and says `Offline`. Conflicts are last-write-wins on the server.
 
-## P4 - Server and database
-Runs as an unprivileged user, a single SQLite file, migrations in code, backups are the owner's job (copy the file). The token and `PUBLIC_URL` come from the environment, never from a file in the repository (`.env` is ignored by git).
+## Time
+Nothing with a date is drawn before SNTP has answered (`Waiting for time`). A fixed UTC offset from Settings (no DST table on the device) turns epoch seconds into dates; events are stored in UTC, so changing the offset only changes how they are shown. Date math (civil-from-days, weekday, month grids, leap years) is integer-only and tested on the PC.
 
-## Controls of the library's list (CT-16 to CT-22), as they stand
-| Control | State |
-|---|---|
-| CT-16 HTTPS with a pinned certificate, never a token over plain HTTP | **Dev-only gap.** HTTP now; A7 closes it. |
-| CT-17 Response limits, timeouts, a JSON parser with a depth limit, validation, copy with limits | **Server side done (A1):** body, string, list and 14 KB response caps built while serializing, rules in one place, tests on both sides of every limit, worst-case bodies, `Content-Length` on a real socket. Device side at A5 (fuzzed). |
-| CT-18 Secrets in an encrypted NVS | **Later** (A7): the token and Wi-Fi password are in a plain NVS during development. |
-| CT-19 Secure Boot | Optional, release only; not planned for v0.1. |
-| CT-20 Logs never print user text or tokens | **Server side done (A1):** the access log has method, a printable path, status and time only (tested with markers), errors never echo the client, `server/scripts/audit.sh` checks what may be logged. Firmware side at A5. |
-| CT-21 Backlight timeout and a privacy mode | A6. |
-| CT-22 Destructive actions need a confirmation | Done in the design: delete and Change Wi-Fi ask again (A3). |
+## Memory (measured at A4 and A5, not assumed)
+Free heap in the library's gallery before Wi-Fi: about 293 KB. Wi-Fi station and lwIP take 60 to 80 KB, the HTTP buffer 16 KB, the model under 12 KB, the QR mask about 14 KB while shown, the UI storage about 20 KB (320 commands, 1.5 KB of text, at least 64 state entries). Goal: at least 100 KB free during a sync and 80 KB during setup. If it does not fit: smaller caches first, then smaller strips.
 
-## Accepted residual risks
-Physical access to the board (flash readable without flash encryption); anyone on the LAN while the transport is plain HTTP (until A7); look-alike letters in titles (the library only filters control and bidi characters, and the fonts here are Latin-1); the ESP-IDF Wi-Fi stack.
+## On the board (measured at A4.2)
+The same components, built by ESP-IDF 5.5 (`firmware/CMakeLists.txt`, one `CMakeLists.txt` per component), draw **every scene exactly as the PC does: 37 of 37 hashes equal** (`firmware/tools/board_hashes.sh` flashes a self-test build, reads `SCENE <name> <palette> <hash>` from the serial port and compares with `firmware/pc/golden`). Application binary 380 KB of the 1.9 MB partition (`partitions.csv`; the NVS and PHY offsets are the default ones, so the touch calibration survives a flash). Memory, classic ESP32 without PSRAM: 309 KB of internal heap free at start; the application (`todo_app` 51.5 KB on the heap, the pretend server of the demo 11 KB, the UI 2 KB plus 25.6 KB of DMA strips) leaves **237 KB free**; the self-test build, with the 66 KB server of the worst-case scenes, leaves 178 KB. **With the Wi-Fi** (A4.3): linking it costs 76 KB of static DRAM, so 233 KB are free at start; after the application 160 KB; with the radio started 110 KB; **in setup mode (access point, DHCP, HTTP server, DNS, the QR page) 83 to 86 KB free for the whole ten minutes, flat** (the goal was 80), and 105 KB once the window has closed. The application binary is 980 KB (50 % of the partition). The heap under a real client (a phone loading and posting the form) is measured at A4.4. Idle, the loop wakes four times a second and a frame costs about 4 ms of the UI and 1 to 3 ms of sending.
+
+## Budget of the screens (measured at A3.5)
+`pc/tests/test_budget.c` renders every named scene (`todo_pc --list`: quests, calendar, a six-row month, agenda, details, confirmations, settings, both QR pages, setup, toast) in both palettes, with the demo data and with the worst case the limits allow (60 quests and events with 64-byte titles and 256-byte notes, a crowded day, a dot on every day), in the memory the board will have: **320 commands, 1536 bytes of text, 64 state entries, 20-row strips**. The busiest frame is **112 of 320 commands** (the agenda); the worst-case scenes need between 512 and 768 bytes of text memory. No library error is raised in any of them. The look of every scene and of 13 scripted runs is pinned by golden hashes (`firmware/pc/golden/`), identical under gcc and clang, which the board must reproduce in A4.
+
+## Look
+The `quest` theme lives in this repository (`firmware/components/theme_quest`, not in the library): a parchment page, dark wood tabs, a gold accent, red wax for destructive buttons, borders as stacked rectangles (3 to 6 commands per widget), a serif font (Liberation Serif, OFL, Latin-1: regular 12 and 16, bold 16 and 24) made by `firmware/tools/gen_fonts.sh` with the library's `fontgen.py` and checked by `ci.sh`, the XP bar as a gradient, stars from a 12x12 A4 mask, a short fade-in of cards (`cydui_animate`, from A3.5). A second palette, "candlelight", for the dark. A test checks that every screen fits the 320-command list.
+
+Decided from the rendered sheets (A3.3, `pc/golden/quest_{widgets,type,parts}_*`): the **16 px serif is the body** (titles, buttons, tabs); the **12 px serif is for secondary information only** (due dates, status line, agenda times, captions), where it is legible on the PC at 1:1 but small; whether it stays comfortable on the real LCD is judged at A4, and the fallback is the library's sans 12 for those lines. Contrast is checked by test (text 7:1, muted and the text on gold, wood and wax at least 4.5:1, in both palettes).
+
+## Repository layout
+```
+server/             Rust: poem, sqlx, SQLite (the device API and the phone pages)
+firmware/
+  third_party/cydui the library, a git submodule pinned to a tag (CYDUI_ROOT overrides it for development)
+  components/       model, repo, net, jsonr, provision, qr, ui, theme_quest (pure C where possible)
+  main/             the ESP-IDF application
+  pc/               SDL + in-memory repository: the main development loop, goldens, tests, fuzz
+docs/               api.md, design.md, threat.md, findings.md
+```

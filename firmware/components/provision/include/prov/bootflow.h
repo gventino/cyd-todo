@@ -39,6 +39,9 @@ void boot_init(boot_flow *f);
 /* Applies an event; returns the actions to carry out. `fail` is read for BOOT_EV_JOIN_FAILED. */
 int boot_step(boot_flow *f, boot_event ev, bool flag, boot_fail fail);
 
+/* The reason of a failed attempt from the numeric WIFI_REASON_* of the ESP-IDF's disconnect event. */
+boot_fail boot_fail_from_wifi_reason(int reason);
+
 /* The sentence for the setup page, e.g. "Wrong password for %s": the caller puts the network name in. NULL for no reason. */
 const char *boot_reason_format(boot_fail r);
 

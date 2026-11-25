@@ -102,3 +102,17 @@ const char *boot_reason_format(boot_fail r)
     }
     return NULL;
 }
+
+boot_fail boot_fail_from_wifi_reason(int reason)
+{
+    switch (reason) {
+    case 15:  /* 4WAY_HANDSHAKE_TIMEOUT: what a wrong WPA2 password usually looks like */
+    case 202: /* AUTH_FAIL */
+    case 204: /* HANDSHAKE_TIMEOUT */
+        return BOOT_FAIL_WRONG_PASSWORD;
+    case 201: /* NO_AP_FOUND */
+        return BOOT_FAIL_NO_NETWORK;
+    default:
+        return BOOT_FAIL_TIMEOUT;
+    }
+}

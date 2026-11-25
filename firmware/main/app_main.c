@@ -14,11 +14,13 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "netsetup.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
 #include "scenes.h"
 #include "sdkconfig.h"
+#include "prov/bootflow.h"
 #include "todo/app.h"
 #include "todo/memrepo.h"
 #include "todo/theme_quest.h"
@@ -141,6 +143,53 @@ static void selftest(void)
 }
 #endif
 
+/* What the radio is doing is shown by the UI, and what the user asks of it is passed on: the two sides only meet here. */
+static void sync_net(void)
+{
+    static uint32_t last_serial = 0xFFFFFFFFu;
+    static boot_state last_state = BOOT_JOINING;
+    static boot_fail shown_reason = BOOT_FAIL_NONE;
+    netsetup_status n;
+    todo_event_kind ev;
+
+    netsetup_get(&n);
+    if (n.serial != last_serial) {
+        char reason[64] = "";
+        const char *fmt = boot_reason_format(n.reason);
+
+        printf("TODO_NET state=%d reason=%d joining=%d connected=%d ap_ready=%d expired=%d creds=%d\n", n.state, n.reason, n.joining, n.connected, n.ap_ready,
+               n.expired, n.has_creds);
+        if (n.ap_ready && !app->ssid[0]) {
+            heap_line("setup open");
+        }
+        todo_app_set_join(app, n.joining, n.ssid);
+        todo_app_set_wifi_name(app, n.has_creds ? n.ssid : "");
+        todo_copy(app->server, sizeof(app->server), n.server);
+        if (fmt) {
+            snprintf(reason, sizeof(reason), fmt, n.ssid);
+        }
+        if (n.state == BOOT_SETUP && (app->overlay != TODO_OV_SETUP || n.reason != shown_reason)) {
+            todo_app_enter_setup(app, NULL, NULL, reason, n.has_creds);
+            shown_reason = n.reason;
+        }
+        if (n.state == BOOT_SETUP && n.ap_ready && strcmp(app->ssid, n.ap_ssid) != 0) {
+            todo_app_set_ap(app, n.ap_ssid, n.ap_pass);
+        }
+        if (last_state == BOOT_SETUP && n.state != BOOT_SETUP) {
+            todo_app_leave_setup(app); /* it joined (or went back to joining): the page has done its job */
+        }
+        last_state = n.state;
+        last_serial = n.serial;
+    }
+    while ((ev = todo_app_take_event(app)) != TODO_EVT_NONE) {
+        if (ev == TODO_EVT_SETUP_REQUESTED) {
+            netsetup_request_setup();
+        } else {
+            netsetup_cancel_setup();
+        }
+    }
+}
+
 static void calibrate(void)
 {
     esp_err_t e = cydui_esp32_calibrate(&dev, &ui.ctx, &todo_serif_16, 60000);
@@ -197,6 +246,12 @@ void app_main(void)
     } else {
         ESP_LOGW(TAG, "no touch: %s", esp_err_to_name(cydui_esp32_touch_status(&dev)));
     }
+    todo_app_set_ap_on_demand(app, true);
+    if (netsetup_start() != ESP_OK) {
+        ESP_LOGE(TAG, "the Wi-Fi did not start");
+    }
+    heap_line("with the Wi-Fi started");
+    sync_net(); /* with nothing saved, the first thing on screen is the setup page */
     cydui_invalidate(&ui.ctx);
     heap_line("running");
 
@@ -205,6 +260,7 @@ void app_main(void)
         bool more;
 
         todo_app_set_time(app, SCENE_NOW + a / 1000000, true);
+        sync_net();
         cydui_ui_begin(&ui, 0);
         todo_app_frame(app, &ui);
         b = esp_timer_get_time();

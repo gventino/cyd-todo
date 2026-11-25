@@ -11,7 +11,8 @@ set(EXTRA_COMPONENT_DIRS
     ${CMAKE_CURRENT_LIST_DIR}/components/theme_quest
     ${CMAKE_CURRENT_LIST_DIR}/components/ui
     ${CMAKE_CURRENT_LIST_DIR}/components/scenes
-    ${CMAKE_CURRENT_LIST_DIR}/components/provision)
+    ${CMAKE_CURRENT_LIST_DIR}/components/provision
+    ${CMAKE_CURRENT_LIST_DIR}/components/netsetup)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(cyd-todo)

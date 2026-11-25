@@ -800,6 +800,24 @@ static void test_cancelling_the_setup_tells_the_platform_and_try_again_asks_agai
     TEST_ASSERT_EQUAL_INT(TODO_EVT_SETUP_REQUESTED, todo_app_take_event(&W.app));
 }
 
+static void test_the_platform_can_close_the_setup_page_when_it_has_joined_a_network(void)
+{
+    world_start(&W, TODO_PALETTE_PARCHMENT, true);
+    world_frames(&W, 6);
+    todo_app_enter_setup(&W.app, "cyd-todo-4F2A", "k7Qm29xT", "", false);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_SETUP, W.app.overlay);
+    todo_app_leave_setup(&W.app);
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_INT(TODO_OV_NONE, W.app.overlay);
+    TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+    W.app.overlay = TODO_OV_AGENDA;
+    W.app.cal_day = 3;
+    W.app.tab = TODO_TAB_CALENDAR;
+    todo_app_leave_setup(&W.app);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(TODO_OV_AGENDA, W.app.overlay, "only the setup page is closed");
+}
+
 static void test_the_status_line_says_when_the_radio_is_joining_a_network(void)
 {
     char s[48];
@@ -875,6 +893,7 @@ int main(void)
     RUN_TEST(test_change_wifi_asks_the_platform_for_an_access_point_once);
     RUN_TEST(test_with_a_platform_that_makes_the_access_point_the_page_waits_for_it);
     RUN_TEST(test_cancelling_the_setup_tells_the_platform_and_try_again_asks_again);
+    RUN_TEST(test_the_platform_can_close_the_setup_page_when_it_has_joined_a_network);
     RUN_TEST(test_the_status_line_says_when_the_radio_is_joining_a_network);
     RUN_TEST(test_settings_shows_the_network_the_platform_names);
     RUN_TEST(test_the_longest_texts_fit_the_detail_and_scroll);

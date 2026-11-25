@@ -92,6 +92,13 @@ void app_request_setup(todo_app *a)
     }
 }
 
+void todo_app_leave_setup(todo_app *a)
+{
+    if (a->overlay == TODO_OV_SETUP) {
+        a->overlay = TODO_OV_NONE;
+    }
+}
+
 void todo_app_open_link(todo_app *a, todo_link_kind kind)
 {
     app_open_qr(a, kind);

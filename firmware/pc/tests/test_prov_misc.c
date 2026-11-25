@@ -327,6 +327,17 @@ static void test_the_reasons_are_sentences_for_the_setup_page(void)
     TEST_ASSERT_NULL(boot_reason_format(BOOT_FAIL_NONE));
 }
 
+static void test_the_radio_s_reasons_become_the_user_s_reasons(void)
+{
+    TEST_ASSERT_EQUAL_INT(BOOT_FAIL_WRONG_PASSWORD, boot_fail_from_wifi_reason(15));
+    TEST_ASSERT_EQUAL_INT(BOOT_FAIL_WRONG_PASSWORD, boot_fail_from_wifi_reason(202));
+    TEST_ASSERT_EQUAL_INT(BOOT_FAIL_WRONG_PASSWORD, boot_fail_from_wifi_reason(204));
+    TEST_ASSERT_EQUAL_INT(BOOT_FAIL_NO_NETWORK, boot_fail_from_wifi_reason(201));
+    TEST_ASSERT_EQUAL_INT(BOOT_FAIL_TIMEOUT, boot_fail_from_wifi_reason(200));
+    TEST_ASSERT_EQUAL_INT(BOOT_FAIL_TIMEOUT, boot_fail_from_wifi_reason(0));
+    TEST_ASSERT_EQUAL_INT(BOOT_FAIL_TIMEOUT, boot_fail_from_wifi_reason(-1));
+}
+
 static void test_whatever_happens_the_table_keeps_its_invariants(void)
 {
     uint32_t x = 12345;
@@ -370,6 +381,7 @@ int main(void)
     RUN_TEST(test_there_is_nothing_to_cancel_back_to_without_a_network);
     RUN_TEST(test_the_window_closes_once_and_try_again_opens_it_again);
     RUN_TEST(test_the_reasons_are_sentences_for_the_setup_page);
+    RUN_TEST(test_the_radio_s_reasons_become_the_user_s_reasons);
     RUN_TEST(test_whatever_happens_the_table_keeps_its_invariants);
     return UNITY_END();
 }

@@ -140,6 +140,9 @@ void todo_app_set_wifi_name(todo_app *a, const char *ssid);
 /* Opens the page with the QR code of a one-time link (what the New quest button does). */
 void todo_app_open_link(todo_app *a, todo_link_kind kind);
 
+/* Closes the setup page, if it is the one on screen (the platform joined a network, or started to). */
+void todo_app_leave_setup(todo_app *a);
+
 /* The text of the status line, for the frame at `ms`. */
 size_t todo_app_status_text(const todo_app *a, char *buf, size_t cap);
 
