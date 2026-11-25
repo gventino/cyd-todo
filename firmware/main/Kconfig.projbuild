@@ -8,4 +8,20 @@ menu "cyd-todo"
             "SCENE <name> <day|night> <hash>", to compare with firmware/pc/golden (tools/board_hashes.sh).
             Needs CYDUI_ESP32_PIXEL_HASH. Uses about 70 KB more heap for the pretend server of the worst-case scenes.
 
+    config TODO_DEFAULT_TZ_MIN
+        int "Time zone of the display, minutes east of UTC (until Settings is persisted)"
+        range -840 840
+        default -180
+
+    config TODO_DEV_SERVER_ADDRESS
+        string "DEVELOPMENT: the server address to use (host:port), over the saved one"
+        default ""
+        help
+            For trying a build without the phone form. Leave empty in anything that is not a development build:
+            put it in firmware/sdkconfig.local (git-ignored), never in sdkconfig.defaults.
+
+    config TODO_DEV_TOKEN
+        string "DEVELOPMENT: the device token to use with it"
+        default ""
+
 endmenu

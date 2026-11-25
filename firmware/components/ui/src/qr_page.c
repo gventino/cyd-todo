@@ -92,6 +92,13 @@ void app_request_setup(todo_app *a)
     }
 }
 
+void todo_app_refresh_now(todo_app *a)
+{
+    a->quests_dirty = true;
+    a->events_dirty = true;
+    a->next_poll = a->ms;
+}
+
 void todo_app_leave_setup(todo_app *a)
 {
     if (a->overlay == TODO_OV_SETUP) {

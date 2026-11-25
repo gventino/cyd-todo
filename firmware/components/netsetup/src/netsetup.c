@@ -102,6 +102,20 @@ static void send(cmd_kind k, int reason)
     }
 }
 
+bool netsetup_creds(prov_creds *out)
+{
+    bool ok;
+
+    if (!lock) {
+        return false;
+    }
+    xSemaphoreTake(lock, portMAX_DELAY);
+    *out = creds;
+    ok = creds.ssid[0] != '\0';
+    xSemaphoreGive(lock);
+    return ok;
+}
+
 void netsetup_request_setup(void)
 {
     send(CMD_SETUP, 0);
@@ -334,6 +348,15 @@ esp_err_t netsetup_start(void)
     memset(&flow, 0, sizeof(flow));
     boot_init(&flow);
     flow.has_creds = creds_load(&creds);
+    /* DEVELOPMENT ONLY (sdkconfig.local, never in the defaults): a server and a token baked into the build, so that a new
+     * build can be tried without going through the phone form. They are written over the saved ones. */
+    if (CONFIG_TODO_DEV_SERVER_ADDRESS[0] != '\0' && flow.has_creds && prov_valid_server(CONFIG_TODO_DEV_SERVER_ADDRESS) &&
+        prov_valid_token(CONFIG_TODO_DEV_TOKEN)) {
+        snprintf(creds.server, sizeof(creds.server), "%s", CONFIG_TODO_DEV_SERVER_ADDRESS);
+        snprintf(creds.token, sizeof(creds.token), "%s", CONFIG_TODO_DEV_TOKEN);
+        creds_save(&creds);
+        ESP_LOGW(TAG, "development build: the server and the token come from the build");
+    }
     first_actions = boot_step(&flow, BOOT_EV_BOOT, flow.has_creds, BOOT_FAIL_NONE); /* the state is known before the radio is */
     e = esp_netif_init();
     if (e == ESP_OK) {

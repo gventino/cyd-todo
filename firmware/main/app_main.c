@@ -15,6 +15,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "netsetup.h"
+#include "netsync.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
@@ -24,6 +25,11 @@
 #include "todo/app.h"
 #include "todo/memrepo.h"
 #include "todo/theme_quest.h"
+
+/* A Kconfig bool that is off is not defined at all: say 0, so that it can be used in an expression. */
+#ifndef CONFIG_TODO_SELFTEST
+#define CONFIG_TODO_SELFTEST 0
+#endif
 
 #define ROWS 20 /* rows per strip: two buffers of 12.8 KB */
 #define W 320
@@ -40,7 +46,7 @@ static cydui_esp32 dev;
 static cydui_ui ui;
 static cydui_theme theme;
 static todo_app *app;
-static todo_memrepo *repo;
+static todo_memrepo *repo; /* only in the self-test build */
 
 /* The clock of the UI: the real one, except in the self-test, where it is the made-up one of the PC's scenes. */
 static cydui_backend real_be, be;
@@ -80,12 +86,14 @@ static bool start_ui(const cydui_theme *th)
 static bool alloc_app(void)
 {
     app = heap_caps_calloc(1, sizeof(*app), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+#if CONFIG_TODO_SELFTEST /* the scenes of the PC program run on the pretend server; the real build has none */
     repo = heap_caps_calloc(1, sizeof(*repo), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    if (!app || !repo) {
-        ESP_LOGE(TAG, "no memory for the application (%u + %u bytes)", (unsigned)sizeof(*app), (unsigned)sizeof(*repo));
+#endif
+    if (!app || (CONFIG_TODO_SELFTEST && !repo)) {
+        ESP_LOGE(TAG, "no memory for the application (%u bytes)", (unsigned)sizeof(*app));
         return false;
     }
-    printf("TODO_SIZES app=%u repo=%u ui=%u\n", (unsigned)sizeof(*app), (unsigned)sizeof(*repo), (unsigned)sizeof(ui));
+    printf("TODO_SIZES app=%u repo=%u ui=%u\n", (unsigned)sizeof(*app), repo ? (unsigned)sizeof(*repo) : 0u, (unsigned)sizeof(ui));
     return true;
 }
 
@@ -149,6 +157,7 @@ static void sync_net(void)
     static uint32_t last_serial = 0xFFFFFFFFu;
     static boot_state last_state = BOOT_JOINING;
     static boot_fail shown_reason = BOOT_FAIL_NONE;
+    static bool was_connected;
     netsetup_status n;
     todo_event_kind ev;
 
@@ -180,6 +189,18 @@ static void sync_net(void)
         }
         last_state = n.state;
         last_serial = n.serial;
+    }
+    if (n.connected && !was_connected) { /* the network is up: tell the server's side, and read everything now */
+        prov_creds c;
+        if (netsetup_creds(&c) && c.server[0] && c.token[0]) {
+            netsync_online(c.server, c.token);
+            todo_app_refresh_now(app);
+        }
+        memset(&c, 0, sizeof(c));
+        was_connected = true;
+    } else if (!n.connected && was_connected) {
+        netsync_offline();
+        was_connected = false;
     }
     while ((ev = todo_app_take_event(app)) != TODO_EVT_NONE) {
         if (ev == TODO_EVT_SETUP_REQUESTED) {
@@ -227,10 +248,12 @@ void app_main(void)
     selftest();
 #endif
 
-    /* The application proper: the demo data and a fixed clock until the network arrives (step A5). */
-    todo_memrepo_init(repo, SCENE_NOW);
-    todo_memrepo_seed_demo(repo);
-    todo_app_init(app, &repo->repo, SCENE_OFFSET);
+    /* The application proper: the server's data, and the clock from SNTP. */
+    if (netsync_start() != ESP_OK) {
+        ESP_LOGE(TAG, "the network task did not start");
+        return;
+    }
+    todo_app_init(app, netsync_repo(), CONFIG_TODO_DEFAULT_TZ_MIN);
     todo_theme_quest_init(&theme, app->palette);
     if (!start_ui(&theme)) {
         return;
@@ -259,7 +282,11 @@ void app_main(void)
         int64_t a = esp_timer_get_time(), b, now;
         bool more;
 
-        todo_app_set_time(app, SCENE_NOW + a / 1000000, true);
+        {
+            int64_t epoch = 0;
+            bool valid = netsync_time(&epoch);
+            todo_app_set_time(app, valid ? epoch : 0, valid);
+        }
         sync_net();
         cydui_ui_begin(&ui, 0);
         todo_app_frame(app, &ui);

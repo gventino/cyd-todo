@@ -37,6 +37,9 @@ esp_err_t netsetup_start(void);
 /* A copy of the status. Cheap; call it every frame. */
 void netsetup_get(netsetup_status *out);
 
+/* The saved network and server (the token included): a copy, for whoever talks to the server. False if nothing is saved. */
+bool netsetup_creds(prov_creds *out);
+
 /* The user chose Change Wi-Fi (or Try again), or left the setup page. */
 void netsetup_request_setup(void);
 void netsetup_cancel_setup(void);
