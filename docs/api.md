@@ -76,20 +76,24 @@ An event: `{"id": 3, "title": "Dentist", "description": "Bring the X-rays", "sta
 `GET /health` -> `{"ok": true}`. No token. The only call that needs none.
 
 ## Phone pages (HTML)
-Server-rendered, no JavaScript framework, a few lines of CSS, made for a phone in portrait. English only.
+Server-rendered, **no JavaScript at all**, one inlined stylesheet, made for a phone in portrait. English only. Every answer of this side (pages, errors and redirects) carries `Content-Security-Policy: default-src 'none'; style-src 'sha256-<hash of the stylesheet>'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and `Cache-Control: no-store`. The phone side never accepts the Bearer token and the device side never accepts a session.
 
 | Route | What |
 |---|---|
-| `GET /m/{code}` | Trades a valid one-time code for a session cookie (`HttpOnly`, `SameSite=Strict`, `Path=/`, 30 minutes) and redirects to the page of its `kind`. A code that is unknown, used or expired is a plain 404 page. |
-| `GET /app` | Home: the open quests and the next events, with links. Needs a session. |
-| `GET /app/quests/new`, `POST /app/quests` | The new-quest form (title, notes, difficulty, due date) and its submission. |
+| `GET /m/{code}` | Trades a valid one-time code for a session cookie (`sid`, `HttpOnly`, `SameSite=Strict`, `Path=/`, `Max-Age=1800`, plus `Secure` when `PUBLIC_URL` is https) and redirects (303) to the page of its `kind`: `/app/quests/new`, `/app/events/new` or `/app`. A code that is malformed, unknown, used or expired is **one and the same** plain 404 page, after the same 200 ms as a wrong token. |
+| `GET /app` | Home: the open quests, a button for a new one, *Leave*. |
+| `GET /app/quests`, `GET /app/quests/new`, `POST /app/quests` | The list (open first, at most 48), the new-quest form (title, notes, difficulty, due date), its submission. |
 | `GET /app/quests/{id}/edit`, `POST /app/quests/{id}` | Edit. |
-| `POST /app/quests/{id}/delete` | Delete (the page asks for a second tap). |
-| `GET /app/events`, `GET /app/events/new`, `POST /app/events`, `GET /app/events/{id}/edit`, `POST /app/events/{id}`, `POST /app/events/{id}/delete` | The same for events; start and end use `<input type="datetime-local">` and are read in the **time zone the page declares** (a hidden field filled from the phone's own zone by a four-line script; without the script, the server's `TZ_OFFSET_MIN`). |
+| `POST /app/quests/{id}/toggle` | Done / Reopen. |
+| `GET /app/quests/{id}/delete`, `POST /app/quests/{id}/delete` | Delete in **two steps**: a confirmation page that names the quest, then the POST. |
+| `GET /app/events?month=YYYY-MM`, `GET /app/events/new`, `POST /app/events`, `GET /app/events/{id}/edit`, `POST /app/events/{id}`, `GET/POST /app/events/{id}/delete` | The same for events: a month (the current one without the parameter; previous and next links; at most 48), start and end with `<input type="datetime-local">`. |
+| `POST /app/logout` | Ends the session. |
 
-Every form is posted with a CSRF token (bound to the session) and answered with a redirect (post-redirect-get). A bad submission shows the form again with the message and what the person typed, **escaped**. Every response carries `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`, plus `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. The four-line script is the one inline script and is allowed by a per-response nonce.
+**Time zone.** Times in the forms and on the pages are in **one fixed zone, `TZ_OFFSET_MIN`** of the server (the same number the board has in its Settings), and are stored in UTC. There is no script to learn the phone's own zone: this is one person's home system. Someone who travels changes the setting.
 
-A phone page is a second client of the same rules: it uses the same validation and the same limits as the device API (one function, one set of tests).
+**Forms.** `application/x-www-form-urlencoded`, at most 4096 bytes, exactly the fields of the page (an extra field is a 400), every one with a hidden `csrf` field that must be the session's token (a wrong token is a 403) and an `Origin` header that, when the browser sends one, must be `PUBLIC_URL` (else 403). A GET never changes anything. A refused form (a rule of the limits table) is shown again with what was typed and the fixed message, status 422. Line ends of a textarea are `\n`-normalized, a title is trimmed. Everything stored is escaped on output; a quest title is attacker-controlled text.
+
+A phone page is a second client of the same rules: it uses the same validators and the same database functions as the device API (one function, one set of tests), so a phone write moves `rev` and the board sees it on its next `GET /changes`.
 
 ## Server configuration (environment)
 | Variable | Meaning |
@@ -98,5 +102,5 @@ A phone page is a second client of the same rules: it uses the same validation a
 | `PUBLIC_URL` | what the phone must use to reach the server, at most 32 bytes (required) |
 | `BIND` | listen address, default `0.0.0.0:8080` |
 | `DATABASE_URL` | SQLite file, default `sqlite://cyd-todo.db` |
-| `TZ_OFFSET_MIN` | zone for phone forms without the script, default 0 |
+| `TZ_OFFSET_MIN` | the zone of the phone pages, minutes east of UTC, -840 to 840, default 0 |
 | `FAULT` | a fault-injection mode for tests of the firmware (`slow`, `truncate`, `huge`, `garbage`, `error500`); never set in real use, refused unless `ALLOW_FAULTS=1`. Parsed in A1, acted on in A5. |

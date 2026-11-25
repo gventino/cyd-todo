@@ -34,15 +34,16 @@ A1 the quests and events (private life); A2 the device token and the Wi-Fi passw
 | D | A slow or silent server blocks the UI; a flood of polls. | One request at a time in the network task, a 15 s timeout, backoff on failure, the UI task never waits for the network; the server limits bodies (4 KB) and links (6 active). |
 | E | A bug in the server's parser. | Rust, no `unsafe`, `sqlx` with bound parameters only (no string-built SQL). |
 
-## P3 - Phone pages (the server's web face)
-| STRIDE | Threat | What the design does |
-|---|---|---|
-| S | Guessing or stealing a one-time link; reusing it. | 128 random bits, stored only as a hash, single use, 10 minutes, at most 6 alive; a used or expired link is a plain 404 that looks like any other; the link travels only in the QR and the phone's address bar (**HTTP: anyone sniffing the LAN while it is used can take the session; dev-only gap, A7**). |
-| T | Cross-site request forgery makes the phone delete quests. | `SameSite=Strict` session cookie, a CSRF token bound to the session in every form, state changes only by POST. |
-| T | **Stored cross-site scripting**: a quest title like `<script>` shown on a page, or in the device JSON. | Everything is HTML-escaped on output (one escaping function, tested with hostile strings in every field and context), `Content-Security-Policy` that allows no script except one nonce-ed inline script of four lines, `X-Content-Type-Options`, `frame-ancestors 'none'`. The device receives JSON strings, never HTML, and draws them as text. |
-| I | The page leaking data to other sites. | `Referrer-Policy: no-referrer`, no third-party resources, no cookies beyond the session. |
-| D | Huge forms, floods. | Same body limit (4 KB) and validation as the device API; one function validates for both faces. |
-| E | A page that can do more than the API. | It cannot: it calls the same functions with the same rules. |
+## P3 - Phone pages (the server's web face) - built in A2, with the evidence
+| STRIDE | Threat | What was built | Evidence |
+|---|---|---|---|
+| S | Guessing, stealing or reusing a one-time link. | 128 random bits from the OS, stored only as a SHA-256; single use by one atomic `UPDATE ... RETURNING`; 10 minutes; at most 6 alive; every failure is the same 404 page after the same 200 ms; the code never reaches the log (`/m/:code`) or any page. **HTTP: anyone sniffing the LAN while the link is used can take the session; dev-only gap, A7.** | `tests/links.rs` (lifecycle, identical failures, expiry to the second, the cap, log redaction, only hashes in the database) |
+| S | A session that outlives its use. | 30 minutes from creation (not sliding), cookie `HttpOnly; SameSite=Strict; Path=/` (+ `Secure` with https), ended by *Leave*; a phone session is not a device token and the reverse. | `tests/links.rs` |
+| T | Cross-site request forgery. | Every state change is a POST with the session's CSRF token (constant time) **and** an `Origin` that must be ours when present, on top of `SameSite=Strict`; a GET never writes; delete is two steps. | `tests/links.rs`, `pages_quests.rs`, `pages_events.rs` (every POST of every page, with a wrong token, a foreign Origin and no session) |
+| T | **Stored cross-site scripting.** | Markup is built only through `html::Html`: text and attribute values are escaped by construction, literals are `'static`; the audit forbids markup in `format!`, raw pushes and `Html(..)` in `pages/`. **No script exists on any page** and the CSP allows none (`default-src 'none'`, the one stylesheet by hash), so a missed escape still cannot run code. | `src/html.rs` tests (5000 random strings), `tests/pages_security.rs`: 22 hostile strings in every field and context (device API and forms, accepted and refused), **every page that can show them**, checked against an allowlist of tags, attributes and link targets (the checker is itself tested on bad pages); mutations that drop the escaping fail 2 to 3 tests |
+| I | Leaking data to other sites or into history. | `Referrer-Policy: no-referrer`, no third-party resources, no cookies but the session, `Cache-Control: no-store`; nothing from the URL or the headers is echoed into a page. | `tests/pages_security.rs` (reflection test) |
+| D | Huge forms, floods, a table that fills. | Form body at most 4096 bytes, at most 6 links alive and expired rows swept, the same 48-item caps; one validation function for both faces. | `tests/links.rs`, `pages_*.rs` |
+| E | A page that can do more than the API. | It cannot: the same validators and database functions. | the tests above |
 
 ## P4 - Server and database
 Runs as an unprivileged user, a single SQLite file, migrations in code, backups are the owner's job (copy the file). The token and `PUBLIC_URL` come from the environment, never from a file in the repository (`.env` is ignored by git).

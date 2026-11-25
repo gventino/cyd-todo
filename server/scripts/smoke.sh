@@ -69,6 +69,26 @@ expect "Content-Length present" 1 "$(printf '%s\n' "$hdr" | grep -ci '^content-l
 expect "not chunked" 0 "$(printf '%s\n' "$hdr" | grep -ci '^transfer-encoding:' || true)"
 expect "JSON content type" 1 "$(printf '%s\n' "$hdr" | grep -ci '^content-type: application/json' || true)"
 
+
+echo "phone pages"
+call POST /link '{"kind":"quest"}'; expect "POST /link" 201 "$status"; url=$(field 'v["url"]')
+jar=$(mktemp); trap 'rm -f "$body" "$jar"' EXIT
+status=$(curl -s -o /dev/null -w '%{http_code}' -c "$jar" "$url"); expect "GET the one-time link" 303 "$status"
+status=$(curl -s -o /dev/null -w '%{http_code}' "$url"); expect "the same link again" 404 "$status"
+status=$(curl -s -o "$body" -w '%{http_code}' -b "$jar" "$BASE/app/quests/new"); expect "GET /app/quests/new with the session" 200 "$status"
+csrf=$(grep -o 'name="csrf" value="[^"]*"' "$body" | head -1 | sed 's/.*value="//;s/"//')
+expect "  a CSRF token is on the form" 26 "${#csrf}"
+status=$(curl -s -o /dev/null -w '%{http_code}' -b "$jar" --data "title=x&difficulty=1" "$BASE/app/quests"); expect "POST without the CSRF token (a missing field)" 400 "$status"
+status=$(curl -s -o /dev/null -w '%{http_code}' -b "$jar" -H 'Origin: http://evil.example' --data "csrf=$csrf&title=x&difficulty=1" "$BASE/app/quests"); expect "POST from a foreign Origin" 403 "$status"
+status=$(curl -s -o /dev/null -w '%{http_code}' -b "$jar" --data-urlencode "csrf=$csrf" --data-urlencode "title=<script>alert(1)</script>" --data "difficulty=2" "$BASE/app/quests"); expect "POST a quest from the phone page" 303 "$status"
+status=$(curl -s -o "$body" -w '%{http_code}' -b "$jar" "$BASE/app/quests"); expect "GET /app/quests" 200 "$status"
+expect "  the title is escaped" 1 "$(grep -c '&lt;script&gt;alert(1)&lt;/script&gt;' "$body" || true)"
+expect "  no raw script tag" 0 "$(grep -c '<script' "$body" || true)"
+hdr=$(curl -s -D - -o /dev/null -b "$jar" "$BASE/app" | tr -d '\r')
+expect "  Content-Security-Policy present" 1 "$(printf '%s\n' "$hdr" | grep -ci '^content-security-policy: default-src .none.')"
+call GET /quests; expect "the phone's quest reached the device API" 1 "$(field 'len([q for q in v["quests"] if q["title"].startswith("<script>")])')"
+pid=$(field '[q["id"] for q in v["quests"] if q["title"].startswith("<script>")][0]'); call DELETE "/quests/$pid"; expect "DELETE it" 204 "$status"
+
 echo "cleanup"
 call DELETE "/events/$eid"; expect "DELETE /events/{id}" 204 "$status"
 call DELETE "/quests/$qid"; expect "DELETE /quests/{id}" 204 "$status"

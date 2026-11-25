@@ -19,6 +19,12 @@ grep -rnE 'tracing::(trace|debug|info|warn|error)!' src | grep -vE 'src/(app|mai
 grep -rnE 'println!|eprintln!|dbg!' src | grep -v 'src/main.rs' && say "printing outside main.rs"
 grep -rnE 'tracing::.*(token|body|header|authorization)' src && say "a log line that names a token, body or header"
 
+# the phone pages build markup only through html::Html: no markup in a formatted string, no raw pushes
+grep -rnE 'format!\([[:space:]]*"[^"]*<' src/pages && say "markup built with format! in src/pages/"
+grep -rnE 'push_str\([[:space:]]*"[^"]*<' src/pages && say "raw markup pushed in src/pages/"
+grep -rnE '\bHtml\(' src/pages && say "Html constructed directly in src/pages/ (use Html::text, Html::lit, Html::tag)"
+grep -rnE 'write!|writeln!' src/pages && say "write! in src/pages/"
+
 # secrets: no token in the tree
 git ls-files | xargs grep -nIE 'CYD_TOKEN=[A-Za-z0-9]{16,}' 2>/dev/null | grep -v 'scripts/audit.sh' && say "a token in a tracked file"
 

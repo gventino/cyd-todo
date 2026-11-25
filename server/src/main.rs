@@ -9,7 +9,7 @@ use cyd_todo_server::db::Db;
 use cyd_todo_server::seed::seed;
 use poem::listener::{Listener, TcpListener};
 
-const USAGE: &str = "usage: cyd-todo-server [serve | seed [--force]]\n\
+const USAGE: &str = "usage: cyd-todo-server [serve | seed [--force] | link [quest|event|home]]\n\
 the configuration is in the environment: CYD_TOKEN, PUBLIC_URL, BIND, DATABASE_URL, TZ_OFFSET_MIN (see README.md)";
 
 fn fail(code: i32, what: &str, why: impl std::fmt::Display) -> ! {
@@ -22,16 +22,36 @@ async fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let command = args.first().map(String::as_str).unwrap_or("serve");
     let force = args.iter().any(|a| a == "--force");
-    if !matches!(command, "serve" | "seed")
-        || args.iter().skip(1).any(|a| a != "--force")
-        || (command == "serve" && force)
-    {
+    let kind = args.get(1).map(String::as_str).unwrap_or("home");
+    let good = match command {
+        "serve" => args.len() <= 1,
+        "seed" => args.iter().skip(1).all(|a| a == "--force"),
+        "link" => args.len() <= 2 && matches!(kind, "quest" | "event" | "home"),
+        _ => false,
+    };
+    if !good {
         fail(2, "bad arguments", USAGE);
     }
 
     let cfg = Config::from_env().unwrap_or_else(|e| fail(2, "configuration error", e));
     tracing_subscriber::fmt().with_target(false).with_max_level(tracing::Level::INFO).init();
     let db = Db::connect(&cfg.database_url).await.unwrap_or_else(|e| fail(1, "database error", e));
+
+    if command == "link" {
+        // a one-time link made by hand, to open the phone pages before the board can show a QR code
+        let kind = match kind {
+            "quest" => cyd_todo_server::db::LinkKind::Quest,
+            "event" => cyd_todo_server::db::LinkKind::Event,
+            _ => cyd_todo_server::db::LinkKind::Home,
+        };
+        let code = cyd_todo_server::token::new_code();
+        db.create_link(&cyd_todo_server::token::hash(&code), kind, (system_clock())())
+            .await
+            .unwrap_or_else(|e| fail(1, "link", e));
+        println!("{}/m/{code}", cfg.public_url);
+        println!("(valid once, for 10 minutes)");
+        return;
+    }
 
     if command == "seed" {
         let empty = db.is_empty().await.unwrap_or_else(|e| fail(1, "database error", e));

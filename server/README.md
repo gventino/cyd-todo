@@ -24,10 +24,16 @@ export PUBLIC_URL=http://192.168.1.50:8080                         # what a phon
 
 A wrong configuration stops the server at start with a message that names the variable and never prints the token. The migrations run at start. Ctrl-C and SIGTERM stop it cleanly.
 
+## Try the phone pages without the board
+```sh
+./target/release/cyd-todo-server link quest     # prints a one-time link (also: event, home); valid once, 10 minutes
+```
+Open the printed URL on a phone that can reach `PUBLIC_URL` (the same Wi-Fi). The link trades itself for a 30-minute session and lands on the new-quest form; the calendar and the list are in the top bar. Times are in `TZ_OFFSET_MIN`. Whatever you write there is visible to the board through `GET /changes` (the revision moves).
+
 ## Check it
 ```sh
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test   # the unit and integration tests
-./scripts/audit.sh                                                              # source audits (no unsafe, no built SQL, what may be logged)
+./scripts/audit.sh                                                              # source audits (no unsafe, no built SQL, what may be logged, no markup outside html::Html)
 CYD_TOKEN=... BASE=http://127.0.0.1:8080 ./scripts/smoke.sh                     # every call of the API against a running server
 ```
 The tests run on an in-memory database and cover every limit of the contract on both sides of its boundary, the error shapes (and that no answer contains what the client sent), the access log (no token, query or body), the worst-case list bodies, and `Content-Length` on a real socket.

@@ -25,7 +25,7 @@ git clone --recurse-submodules https://github.com/gventino/cyd-todo.git
 ```
 
 ## Status of the plan
-A0 repository and contract (done) - A1 server device API (done, see `server/README.md`) - A2 server phone pages - A3 model and UI on the PC - A4 Wi-Fi setup by QR - A5 network and sync - A6 polish and hardening - A7 TLS.
+A0 repository and contract (done) - A1 server device API (done, see `server/README.md`) - A2 server phone pages (done) - A3 model and UI on the PC - A4 Wi-Fi setup by QR - A5 network and sync - A6 polish and hardening - A7 TLS.
 
 ## License
 MIT, see `LICENSE`. The serif font that will be bundled is under the SIL OFL (its license will be in `firmware/fonts/`).
