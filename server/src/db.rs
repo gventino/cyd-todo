@@ -41,6 +41,37 @@ pub struct Event {
     pub updated_at: i64,
 }
 
+/// Where a one-time link lands the phone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkKind {
+    Quest,
+    Event,
+    Home,
+}
+
+impl LinkKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            LinkKind::Quest => "quest",
+            LinkKind::Event => "event",
+            LinkKind::Home => "home",
+        }
+    }
+    fn parse(s: &str) -> Option<LinkKind> {
+        match s {
+            "quest" => Some(LinkKind::Quest),
+            "event" => Some(LinkKind::Event),
+            "home" => Some(LinkKind::Home),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Session {
+    pub csrf: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuestState {
     Open,
@@ -363,6 +394,73 @@ impl Db {
         .await?)
     }
 
+    // ---- one-time links and sessions ----
+
+    /// Stores the hash of a new link. At most `LINKS_MAX` can be alive: used and expired ones are swept first.
+    pub async fn create_link(&self, code_hash: &[u8], kind: LinkKind, now: i64) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("DELETE FROM links WHERE used = 1 OR expires_at <= ?").bind(now).execute(&mut *tx).await?;
+        let (alive,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM links").fetch_one(&mut *tx).await?;
+        if alive >= limits::LINKS_MAX as i64 {
+            return Err(Error::TooMany);
+        }
+        sqlx::query("INSERT INTO links (code_hash, kind, expires_at, used) VALUES (?, ?, ?, 0)")
+            .bind(code_hash)
+            .bind(kind.as_str())
+            .bind(now + limits::LINK_TTL)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Spends a link: one atomic statement, so two phones with the same code cannot both win.
+    pub async fn use_link(&self, code_hash: &[u8], now: i64) -> Result<Option<LinkKind>> {
+        let row: Option<(String,)> = sqlx::query_as(
+            "UPDATE links SET used = 1 WHERE code_hash = ? AND used = 0 AND expires_at > ? RETURNING kind",
+        )
+        .bind(code_hash)
+        .bind(now)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.and_then(|(k,)| LinkKind::parse(&k)))
+    }
+
+    pub async fn create_session(&self, id_hash: &[u8], csrf: &str, now: i64) -> Result<()> {
+        sqlx::query("DELETE FROM sessions WHERE expires_at <= ?").bind(now).execute(&self.pool).await?;
+        sqlx::query("INSERT INTO sessions (id_hash, csrf, expires_at) VALUES (?, ?, ?)")
+            .bind(id_hash)
+            .bind(csrf)
+            .bind(now + limits::SESSION_TTL)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn session(&self, id_hash: &[u8], now: i64) -> Result<Option<Session>> {
+        let row: Option<(String,)> = sqlx::query_as("SELECT csrf FROM sessions WHERE id_hash = ? AND expires_at > ?")
+            .bind(id_hash)
+            .bind(now)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row.map(|(csrf,)| Session { csrf }))
+    }
+
+    pub async fn delete_session(&self, id_hash: &[u8]) -> Result<()> {
+        sqlx::query("DELETE FROM sessions WHERE id_hash = ?").bind(id_hash).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    /// Everything the two secret tables hold, as one string (for a test that looks for a code in it).
+    #[doc(hidden)]
+    pub async fn dump_secrets_for_tests(&self) -> String {
+        let links: Vec<(Vec<u8>, String)> =
+            sqlx::query_as("SELECT code_hash, kind FROM links").fetch_all(&self.pool).await.unwrap_or_default();
+        let sessions: Vec<(Vec<u8>, String)> =
+            sqlx::query_as("SELECT id_hash, csrf FROM sessions").fetch_all(&self.pool).await.unwrap_or_default();
+        format!("{links:?} {sessions:?}")
+    }
+
     /// Row counts, for the seed command.
     pub async fn is_empty(&self) -> Result<bool> {
         let (n,): (i64,) = sqlx::query_as("SELECT (SELECT COUNT(*) FROM quests) + (SELECT COUNT(*) FROM events)")
@@ -602,6 +700,44 @@ mod tests {
             .execute(&db.pool)
             .await;
         assert!(r.is_err(), "end not after start");
+    }
+
+    #[tokio::test]
+    async fn a_link_works_once_and_not_after_it_expires() {
+        let db = Db::memory().await.unwrap();
+        let h = crate::token::hash("00000000000000000000000001");
+        db.create_link(&h, LinkKind::Event, T).await.unwrap();
+        assert_eq!(db.use_link(&h, T + 599).await.unwrap(), Some(LinkKind::Event));
+        assert_eq!(db.use_link(&h, T + 600).await.unwrap(), None, "used");
+        let h2 = crate::token::hash("00000000000000000000000002");
+        db.create_link(&h2, LinkKind::Home, T).await.unwrap();
+        assert_eq!(db.use_link(&h2, T + 600).await.unwrap(), None, "expired at exactly the ttl");
+        assert_eq!(db.use_link(&crate::token::hash("nope"), T).await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn at_most_six_links_are_alive_and_used_or_expired_ones_free_their_place() {
+        let db = Db::memory().await.unwrap();
+        let hs: Vec<Vec<u8>> = (0..8).map(|i| crate::token::hash(&format!("{i:026}"))).collect();
+        for h in &hs[..6] {
+            db.create_link(h, LinkKind::Quest, T).await.unwrap();
+        }
+        assert!(matches!(db.create_link(&hs[6], LinkKind::Quest, T).await, Err(Error::TooMany)));
+        db.use_link(&hs[0], T + 1).await.unwrap(); // spending one frees its place
+        db.create_link(&hs[6], LinkKind::Quest, T + 2).await.unwrap();
+        assert!(matches!(db.create_link(&hs[7], LinkKind::Quest, T + 3).await, Err(Error::TooMany)));
+        db.create_link(&hs[7], LinkKind::Quest, T + 601).await.unwrap(); // the first six have expired
+    }
+
+    #[tokio::test]
+    async fn a_session_lives_for_thirty_minutes_and_can_be_ended() {
+        let db = Db::memory().await.unwrap();
+        let h = crate::token::hash("00000000000000000000000009");
+        db.create_session(&h, "00000000000000000000000008", T).await.unwrap();
+        assert_eq!(db.session(&h, T + 1799).await.unwrap().unwrap().csrf, "00000000000000000000000008");
+        assert!(db.session(&h, T + 1800).await.unwrap().is_none());
+        db.delete_session(&h).await.unwrap();
+        assert!(db.session(&h, T).await.unwrap().is_none());
     }
 
     #[tokio::test]

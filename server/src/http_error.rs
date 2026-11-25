@@ -109,6 +109,7 @@ impl From<Error> for ApiError {
             Error::Invalid(i) => ApiError::invalid(i),
             Error::BadRequest(m) => ApiError::bad_request(m),
             Error::NotFound => ApiError::not_found(),
+            Error::TooMany => ApiError::too_many(),
             Error::Db(err) => {
                 // The cause goes to the log (it holds no request data: sqlx reports the kind of failure);
                 // the client gets nothing.

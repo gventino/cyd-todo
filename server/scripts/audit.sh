@@ -15,7 +15,7 @@ grep -rnE 'format!\([^)]*(SELECT|INSERT|UPDATE|DELETE|WHERE)' src && say "SQL bu
 grep -rn 'AssertSqlSafe' src && say "AssertSqlSafe: a query that is not a static string"
 
 # what may be logged: only the access log line, startup lines and database errors; never a body, a header, a token
-grep -rnE 'tracing::(trace|debug|info|warn|error)!' src | grep -vE 'src/(app|main|http_error)\.rs' && say "logging outside app.rs, main.rs, http_error.rs"
+grep -rnE 'tracing::(trace|debug|info|warn|error)!' src | grep -vE 'src/(app|main|http_error|pages/[a-z]+)\.rs' && say "logging outside app.rs, main.rs, http_error.rs, pages/"
 grep -rnE 'println!|eprintln!|dbg!' src | grep -v 'src/main.rs' && say "printing outside main.rs"
 grep -rnE 'tracing::.*(token|body|header|authorization)' src && say "a log line that names a token, body or header"
 

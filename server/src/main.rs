@@ -46,6 +46,9 @@ async fn main() {
     let state = Arc::new(AppState {
         db,
         token: cfg.token.clone().into_bytes(),
+        public_url: cfg.public_url.clone(),
+        tz_offset_min: cfg.tz_offset_min,
+        csp: cyd_todo_server::html::csp(),
         clock: system_clock(),
         log: tracing_sink(),
         auth_delay: Duration::from_millis(200),

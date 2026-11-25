@@ -9,6 +9,7 @@ pub mod html;
 pub mod http_error;
 pub mod limits;
 pub mod listing;
+pub mod pages;
 pub mod seed;
 pub mod timeutil;
 pub mod token;

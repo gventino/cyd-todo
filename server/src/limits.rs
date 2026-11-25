@@ -21,8 +21,12 @@ pub const EPOCH_MIN: i64 = 946_684_800;
 pub const EPOCH_MAX: i64 = 4_102_444_800;
 pub const WINDOW_MAX_SECS: i64 = 62 * 86_400;
 pub const EVENT_MAX_SECS: i64 = 31 * 86_400;
-/// Active one-time links.
+/// Active one-time links, and how long a link and a session live (seconds).
 pub const LINKS_MAX: usize = 6;
+pub const LINK_TTL: i64 = 600;
+pub const SESSION_TTL: i64 = 1800;
+/// The longest link URL: `PUBLIC_URL` (32) + "/m/" + a 26-character code, which fits a QR code of version 4.
+pub const LINK_URL_MAX: usize = 61;
 pub const TOKEN_MIN: usize = 32;
 pub const PUBLIC_URL_MAX: usize = 32;
 

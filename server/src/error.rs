@@ -12,6 +12,8 @@ pub enum Error {
     BadRequest(&'static str),
     /// No such row (404).
     NotFound,
+    /// Too many active one-time links (429).
+    TooMany,
     /// The database failed (500; the cause is logged, never sent).
     Db(sqlx::Error),
 }
@@ -22,6 +24,7 @@ impl fmt::Display for Error {
             Error::Invalid(i) => write!(f, "invalid: {i}"),
             Error::BadRequest(m) => write!(f, "bad request: {m}"),
             Error::NotFound => f.write_str("not found"),
+            Error::TooMany => f.write_str("too many active links"),
             Error::Db(e) => write!(f, "database error: {e}"),
         }
     }

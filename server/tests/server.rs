@@ -29,6 +29,9 @@ async fn start() -> std::net::SocketAddr {
     let state = Arc::new(AppState {
         db,
         token: TOKEN.as_bytes().to_vec(),
+        public_url: "http://127.0.0.1:8080".into(),
+        tz_offset_min: 0,
+        csp: cyd_todo_server::html::csp(),
         clock: cyd_todo_server::app::system_clock(),
         log: Arc::new(|_| {}),
         auth_delay: Duration::ZERO,

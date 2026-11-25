@@ -10,10 +10,12 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize};
 use subtle::ConstantTimeEq;
 
-use crate::db::{Db, EventPatch, NewEvent, NewQuest, QuestPatch, QuestState};
+use crate::db::{Db, EventPatch, LinkKind, NewEvent, NewQuest, QuestPatch, QuestState};
 use crate::http_error::ApiError;
 use crate::limits::{self, BODY_MAX, LIST_MAX};
 use crate::listing;
+use crate::pages;
+use crate::token;
 
 /// Where access-log lines go (a closure, so a test can read them).
 pub type LogSink = Arc<dyn Fn(String) + Send + Sync>;
@@ -23,10 +25,23 @@ pub type Clock = Arc<dyn Fn() -> i64 + Send + Sync>;
 pub struct AppState {
     pub db: Db,
     pub token: Vec<u8>,
+    /// What the phone uses to reach the server (`http://host:port`); the base of a link and the `Origin` of a form.
+    pub public_url: String,
+    /// The zone of the phone pages, minutes east of UTC.
+    pub tz_offset_min: i32,
+    /// The `Content-Security-Policy` of every phone page.
+    pub csp: String,
     pub clock: Clock,
     pub log: LogSink,
     /// What a wrong token costs the caller (200 ms; not a lockout).
     pub auth_delay: Duration,
+}
+
+impl AppState {
+    /// Cookies carry `Secure` once the server is reached over https (A7).
+    pub fn secure_cookie(&self) -> bool {
+        self.public_url.starts_with("https://")
+    }
 }
 
 pub fn system_clock() -> Clock {
@@ -49,7 +64,10 @@ pub fn app(state: Arc<AppState>) -> impl Endpoint {
         .at("/quests/:id", get(get_quest).patch(patch_quest).delete(delete_quest))
         .at("/events", get(list_events).post(create_event))
         .at("/events/:id", get(get_event).patch(patch_event).delete(delete_event))
-        .at("/changes", get(changes));
+        .at("/changes", get(changes))
+        .at("/link", poem::post(create_link))
+        .at("/m/:code", get(exchange))
+        .nest("/app", pages::routes());
     routes.around(guard).data(state).catch_all_error(|err: poem::Error| async move {
         match err.downcast_ref::<ApiError>() {
             Some(api) => api.to_response(),
@@ -60,19 +78,33 @@ pub fn app(state: Arc<AppState>) -> impl Endpoint {
 
 /// What one request leaves in the log: the method, the path made printable, the status, how long.
 fn log_line(method: &Method, path: &str, status: StatusCode, started: Instant) -> String {
+    // the code of a one-time link is a credential: it never reaches the log
+    let path = if path.starts_with("/m/") { "/m/:code" } else { path };
     let clean: String = path.chars().take(64).map(|c| if c.is_ascii_graphic() { c } else { '?' }).collect();
     format!("{method} {clean} {} {}ms", status.as_u16(), started.elapsed().as_millis())
 }
 
-/// Auth for everything but `GET /health`, and the access log (no query, no headers, no bodies).
+/// Which door a request came through: `/health` is open, `/m/..` and `/app..` are the phone side (a link and a
+/// session cookie, no Bearer token), everything else is the device API.
+fn is_phone_side(path: &str) -> bool {
+    path.starts_with("/m/") || path == "/app" || path.starts_with("/app/")
+}
+
+/// Auth for the device API, the security headers of the phone side, and the access log (no query, no
+/// headers, no bodies).
 async fn guard<E: Endpoint>(next: E, req: Request) -> poem::Result<Response> {
     let state = req.data::<Arc<AppState>>().cloned().ok_or_else(ApiError::internal)?;
     let started = Instant::now();
     let method = req.method().clone();
     let path = req.uri().path().to_string();
 
-    let open = method == Method::GET && path == "/health";
-    let resp = if open || authorized(&req, &state.token) {
+    let resp = if is_phone_side(&path) {
+        let r = match next.call(req).await {
+            Ok(r) => r.into_response(),
+            Err(e) => pages::error_page(e.status()),
+        };
+        pages::harden(r, &state)
+    } else if method == Method::GET && path == "/health" || authorized(&req, &state.token) {
         match next.call(req).await {
             Ok(r) => r.into_response(),
             Err(e) => match e.downcast_ref::<ApiError>() {
@@ -356,4 +388,74 @@ where
     A: poem::listener::Acceptor + 'static,
 {
     poem::Server::new_with_acceptor(acceptor).run_with_graceful_shutdown(app(state), shutdown, None).await
+}
+
+// ---- one-time links ----
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LinkIn {
+    kind: LinkKindIn,
+}
+
+#[derive(Deserialize, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+enum LinkKindIn {
+    Quest,
+    Event,
+    Home,
+}
+
+#[handler]
+async fn create_link(Data(state): Data<&Arc<AppState>>, body: Body) -> Result<Response, ApiError> {
+    let input: LinkIn = read_json(body).await?;
+    let kind = match input.kind {
+        LinkKindIn::Quest => LinkKind::Quest,
+        LinkKindIn::Event => LinkKind::Event,
+        LinkKindIn::Home => LinkKind::Home,
+    };
+    let code = token::new_code();
+    let url = format!("{}/m/{code}", state.public_url);
+    if url.len() > limits::LINK_URL_MAX {
+        return Err(ApiError::internal()); // PUBLIC_URL is checked at start; this cannot happen
+    }
+    state.db.create_link(&token::hash(&code), kind, (state.clock)()).await?;
+    json(StatusCode::CREATED, &serde_json::json!({"url": url, "expires_in": limits::LINK_TTL}))
+}
+
+/// The phone side of a link: trades a good code for a session and sends the phone to its page. Every kind of
+/// failure (malformed, unknown, used, expired) is the same page, after the same delay as a wrong token.
+#[handler]
+async fn exchange(Data(state): Data<&Arc<AppState>>, Path(code): Path<String>) -> Response {
+    let now = (state.clock)();
+    let kind = if token::well_formed(&code) {
+        match state.db.use_link(&token::hash(&code), now).await {
+            Ok(k) => k,
+            Err(e) => {
+                tracing::error!("database error: {e}");
+                return pages::error_page(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        }
+    } else {
+        None
+    };
+    let Some(kind) = kind else {
+        tokio::time::sleep(state.auth_delay).await;
+        return pages::not_found_page();
+    };
+    let (sid, csrf) = (token::new_code(), token::new_code());
+    if let Err(e) = state.db.create_session(&token::hash(&sid), &csrf, now).await {
+        tracing::error!("database error: {e}");
+        return pages::error_page(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+    let to = match kind {
+        LinkKind::Quest => "/app/quests/new",
+        LinkKind::Event => "/app/events/new",
+        LinkKind::Home => "/app",
+    };
+    let mut resp = pages::redirect(to);
+    if let Ok(c) = pages::session_cookie(&sid, state.secure_cookie()).parse() {
+        resp.headers_mut().insert("Set-Cookie", c);
+    }
+    resp
 }
