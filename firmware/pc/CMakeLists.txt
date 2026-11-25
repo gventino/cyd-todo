@@ -27,6 +27,8 @@ function(todo_component name)
 endfunction()
 
 todo_component(model)
+todo_component(repo)
+target_link_libraries(todo_repo PUBLIC todo_model)
 
 # ---- tests (Unity, from the library) ----
 enable_testing()
@@ -44,3 +46,4 @@ endfunction()
 
 todo_test(test_model todo_model)
 todo_test(test_datetime todo_model)
+todo_test(test_memrepo todo_repo)
