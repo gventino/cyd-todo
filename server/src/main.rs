@@ -1,22 +1,79 @@
 #![forbid(unsafe_code)]
 
+use std::sync::Arc;
+use std::time::Duration;
+
+use cyd_todo_server::app::{AppState, serve, system_clock, tracing_sink};
 use cyd_todo_server::config::Config;
 use cyd_todo_server::db::Db;
+use cyd_todo_server::seed::seed;
+use poem::listener::{Listener, TcpListener};
+
+const USAGE: &str = "usage: cyd-todo-server [serve | seed [--force]]\n\
+the configuration is in the environment: CYD_TOKEN, PUBLIC_URL, BIND, DATABASE_URL, TZ_OFFSET_MIN (see README.md)";
+
+fn fail(code: i32, what: &str, why: impl std::fmt::Display) -> ! {
+    eprintln!("{what}: {why}");
+    std::process::exit(code);
+}
 
 #[tokio::main]
 async fn main() {
-    let cfg = match Config::from_env() {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("configuration error: {e}");
-            std::process::exit(2);
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let command = args.first().map(String::as_str).unwrap_or("serve");
+    let force = args.iter().any(|a| a == "--force");
+    if !matches!(command, "serve" | "seed")
+        || args.iter().skip(1).any(|a| a != "--force")
+        || (command == "serve" && force)
+    {
+        fail(2, "bad arguments", USAGE);
+    }
+
+    let cfg = Config::from_env().unwrap_or_else(|e| fail(2, "configuration error", e));
+    tracing_subscriber::fmt().with_target(false).with_max_level(tracing::Level::INFO).init();
+    let db = Db::connect(&cfg.database_url).await.unwrap_or_else(|e| fail(1, "database error", e));
+
+    if command == "seed" {
+        let empty = db.is_empty().await.unwrap_or_else(|e| fail(1, "database error", e));
+        if !empty && !force {
+            fail(1, "seed", "the database already has rows (use --force to add the demo data anyway)");
+        }
+        seed(&db, (system_clock())()).await.unwrap_or_else(|e| fail(1, "seed", e));
+        println!("demo data added");
+        return;
+    }
+
+    let state = Arc::new(AppState {
+        db,
+        token: cfg.token.clone().into_bytes(),
+        clock: system_clock(),
+        log: tracing_sink(),
+        auth_delay: Duration::from_millis(200),
+    });
+    let acceptor =
+        TcpListener::bind(cfg.bind.clone()).into_acceptor().await.unwrap_or_else(|e| fail(1, "cannot listen", e));
+    tracing::info!("listening on {} (public url {})", cfg.bind, cfg.public_url);
+    if let Err(e) = serve(acceptor, state, shutdown()).await {
+        fail(1, "server error", e);
+    }
+    tracing::info!("stopped");
+}
+
+/// Ctrl-C or SIGTERM (systemd, docker stop).
+async fn shutdown() {
+    let ctrl_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+    #[cfg(unix)]
+    let term = async {
+        if let Ok(mut s) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            s.recv().await;
         }
     };
-    match Db::connect(&cfg.database_url).await {
-        Ok(_) => println!("database ready (no routes yet)"),
-        Err(e) => {
-            eprintln!("database error: {e}");
-            std::process::exit(1);
-        }
+    #[cfg(not(unix))]
+    let term = std::future::pending::<()>();
+    tokio::select! {
+        () = ctrl_c => {},
+        () = term => {},
     }
 }

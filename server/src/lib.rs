@@ -8,3 +8,4 @@ pub mod error;
 pub mod http_error;
 pub mod limits;
 pub mod listing;
+pub mod seed;

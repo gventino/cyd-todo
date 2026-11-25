@@ -1,0 +1,37 @@
+# /etc/systemd/system/cyd-todo.service
+#   sudo useradd --system --home /var/lib/cyd-todo --create-home cyd-todo
+#   sudo install -m 0755 target/release/cyd-todo-server /usr/local/bin/
+#   sudo install -m 0600 -o root cyd-todo.env /etc/cyd-todo.env      (see README.md for the variables)
+#   sudo systemctl enable --now cyd-todo
+[Unit]
+Description=cyd-todo server (quests and calendar for the CYD)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=cyd-todo
+Group=cyd-todo
+EnvironmentFile=/etc/cyd-todo.env
+WorkingDirectory=/var/lib/cyd-todo
+ExecStart=/usr/local/bin/cyd-todo-server serve
+Restart=on-failure
+RestartSec=3
+
+# a service that only needs its own directory and the network
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cyd-todo
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
