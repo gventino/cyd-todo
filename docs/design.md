@@ -1,0 +1,92 @@
+# Design
+
+cyd-todo is a quest log and a calendar for the ESP32 "Cheap Yellow Display" (320x240, resistive touch, no PSRAM), with a small server at home. It is also the real application that `cydui` needs before 1.0.0: everything the library gets in the way of is written in `findings.md`.
+
+Nothing is typed on the display. Wi-Fi is set up from a phone by scanning a QR code, and quests and events are entered on the phone through a page of the server, again behind a QR code. The display is for looking and for taps that need no keyboard.
+
+## What it holds
+- **Quest**: title (1..64 bytes), notes (0..256), difficulty 1..5, optional due date, state open/done. Done gives **XP**: `difficulty * 10`.
+- **Event**: title (1..64), start and end (UTC epoch seconds, end after start, at most 31 days long), description (0..256).
+- Limits are the ones in `api.md`; the firmware's fixed arrays have the same sizes.
+
+## Levels (integer math)
+Total XP needed to *reach* level `L` (L >= 1) is `50 * L * (L - 1)`: level 1 at 0 XP, 2 at 100, 3 at 300, 4 at 600, 5 at 1000. From `xp` the device finds `L` by a loop (no square root) and shows `xp - need(L)` over `need(L+1) - need(L)` as a bar. A quest of difficulty 5 is 50 XP, so level 2 is two of them.
+
+## Screens (320 x 240)
+Three tabs at the top (parchment on dark wood): **Quests**, **Calendar**, **Settings**. A thin status line at the bottom: `Synced 12:04`, `Offline`, `Waiting for time`, or an error.
+
+```
+ Quests screen                          Calendar screen
++--------------------------------+     +--------------------------------+
+| [Quests] Calendar  Settings    |     |  Quests [Calendar] Settings    |
+| Lv 2  =========-----  170/200  |     |  < December 2026 >             |
+|--------------------------------|     |  M  T  W  T  F  S  S           |
+| [ ] Slay the inbox      ***  1 |     |  .  1  2  3  4  5  6           |
+| [ ] Visit the dentist   **   3 |     |  7  8 [9] 10 11 12 13  <- dots |
+| [x] Pay the guild fees  *    - |     |  ...                           |
+|                                |     |--------------------------------|
+|                  [ + New quest]|     |  Wed 9: 10:00-10:45 Dentist    |
+| Synced 12:04                   |     |                  [ + Add event]|
++--------------------------------+     +--------------------------------+
+```
+- A **quest card** is a row at least 32 px tall (touch target): a checkbox (tap to complete, with a short animation and the XP gained), the title, stars for the difficulty, the due date. Tapping the title opens a popup with the notes and a *Delete* button; delete asks again (a confirmation popup, CT-22). Done quests are faded and sit below the open ones.
+- **New quest** / **Add event** open a popup with a **QR code** and the line "Scan to write it on your phone". The QR is a one-time link (`POST /link`). The board asks `GET /changes` every 3 seconds while the popup is open and closes it by itself when the phone has saved something (and for good after 10 minutes, when the link expires).
+- **Calendar**: month grid (Monday first), days with events marked by a dot, today ringed, the selected day highlighted; the **agenda** under it lists the events of the day in order (`10:00-10:45 Dentist`; one that crosses midnight says `until Thu 01:30`) and the quests due that day. Tapping a day selects it; `<` and `>` change month.
+- **Settings**: the Wi-Fi network and the signal, the server address, the time zone (a list of UTC offsets), the backlight timeout (a short list), the version, **Change Wi-Fi** (asks for confirmation, then goes to setup mode), and a line with the heap for development builds.
+
+## Wi-Fi setup by QR
+The board decides at boot:
+
+```
+boot
+ |
+ +-- credentials in NVS? --no--> SETUP
+ |         |yes
+ |         v
+ |   connect (up to 3 tries, 15 s each) --ok--> NORMAL (no QR at all)
+ |         |fail
+ |         v
+ |   SETUP, with the message "Could not join <ssid>"
+ |
+ SETUP: open an access point "cyd-todo-XXXX" (WPA2, a random 8-character password), show the Wi-Fi QR
+        WIFI:T:WPA;S:cyd-todo-XXXX;P:<password>;;   and the text of the steps.
+        Phone joins -> the captive portal opens the form (or the address 192.168.4.1 by hand, shown on
+        screen as text and as a second QR).
+        Form: network (a list the board scanned), password, server address, device token -> POST.
+        The board validates, stores in NVS, stops the access point, tries to join:
+          ok    -> NORMAL, the QR is gone; the form tells the phone it worked.
+          fail  -> back to SETUP with the reason on screen and in the form.
+        The window closes after 10 minutes (the QR is replaced by "Setup timed out. Tap to try again").
+```
+Access point and station are never on together except for the instant of the trial. Setup can also be started from Settings, which erases nothing until the form is submitted successfully.
+
+## Where things run
+- **UI task** owns the model and everything `cydui` (the library is not thread-safe, CT-11). It draws at most when something changed and sleeps otherwise (the library's dirty regions, `cydui_ui_end` returning false).
+- **Network task** owns Wi-Fi, SNTP and HTTP. It takes *requests* from a queue (`refresh quests`, `refresh events for [from, to)`, `complete quest id`, `delete id`, `new link kind`, `poll changes`) and posts *results* to another queue. It never touches the model or the UI. One request at a time, a 15 s timeout, a 16 KB response buffer that is never exceeded (the HTTP client is told the maximum and gives up the connection when the server says more).
+- **Provisioning** (setup mode) has its own tiny HTTP server and a DNS answerer while it lasts, and none of the above runs then.
+
+## Sync
+Server is the truth. The board keeps a small cache in RAM: every open quest (up to 48) and the events of the month on screen plus a week on either side (up to 48). It refreshes:
+- when a tab or month is opened, after a tap that changed something, and when `GET /changes` says the revision moved;
+- every 60 s while idle (a single ~30-byte call), every 3 s while a QR is on the screen.
+A tap (complete, delete) is applied on the screen at once and sent; if the request fails the card goes back and the status line says so. No offline queue in v1: offline, the board shows what it has and says `Offline`. Conflicts are last-write-wins on the server.
+
+## Time
+Nothing with a date is drawn before SNTP has answered (`Waiting for time`). A fixed UTC offset from Settings (no DST table on the device) turns epoch seconds into dates; events are stored in UTC, so changing the offset only changes how they are shown. Date math (civil-from-days, weekday, month grids, leap years) is integer-only and tested on the PC.
+
+## Memory (measured at A4 and A5, not assumed)
+Free heap in the library's gallery before Wi-Fi: about 293 KB. Wi-Fi station and lwIP take 60 to 80 KB, the HTTP buffer 16 KB, the model under 12 KB, the QR mask about 14 KB while shown, the UI storage about 20 KB (320 commands, 1.5 KB of text, at least 64 state entries). Goal: at least 100 KB free during a sync and 80 KB during setup. If it does not fit: smaller caches first, then smaller strips.
+
+## Look
+The `quest` theme lives in this repository (not in the library): a parchment page, dark wood tabs, a gold accent, red wax for destructive buttons, borders as stacked rectangles, a serif font (Liberation Serif, OFL, Latin-1) made with the library's `fontgen.py`, the XP bar as a gradient, a short fade-in of cards (`cydui_animate`). A second palette, "candlelight", for the dark. A test checks that every screen fits the 320-command list.
+
+## Repository layout
+```
+server/             Rust: poem, sqlx, SQLite (the device API and the phone pages)
+firmware/
+  third_party/cydui the library, a git submodule pinned to a tag (CYDUI_ROOT overrides it for development)
+  components/       model, repo, net, jsonr, provision, qr, ui, theme_quest (pure C where possible)
+  main/             the ESP-IDF application
+  pc/               SDL + in-memory repository: the main development loop, goldens, tests, fuzz
+docs/               api.md, design.md, threat.md, findings.md
+```

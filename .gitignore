@@ -1,0 +1,17 @@
+# build outputs
+/server/target/
+/server/*.db
+/server/*.db-*
+/firmware/build/
+/firmware/pc/build/
+/firmware/sdkconfig
+/firmware/sdkconfig.old
+/firmware/managed_components/
+/firmware/dependencies.lock
+
+# secrets and local settings never go in git
+.env
+*.token
+
+# local check script: runs on the developer machine only, there is no hosted CI
+ci.sh
