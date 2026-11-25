@@ -1,0 +1,21 @@
+CONFIG_IDF_TARGET="esp32"
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# CT-13: stack protector in every function, and a heap that notices overruns and use after free.
+CONFIG_COMPILER_STACK_CHECK_MODE_STRONG=y
+CONFIG_HEAP_POISONING_COMPREHENSIVE=y
+
+# The pins and settings of the classic CYD (docs/09-hardware-notes.md of the library).
+CONFIG_CYDUI_ESP32_PROFILE_CYD=y
+
+# -O2: the IDF default is -Og (debug), which makes the rasterizer several times slower.
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+# What the memory and the CPU use are measured with.
+CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y

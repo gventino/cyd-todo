@@ -1,0 +1,6 @@
+# Name,   Type, SubType, Offset,  Size
+# Offsets of the NVS and the PHY data are the ones of the default table, so that flashing this table keeps what is in
+# them (the touch calibration, later the Wi-Fi credentials). The application gets what the default table gives it twice.
+nvs,      data, nvs,     0x9000,  0x6000,
+phy_init, data, phy,     0xf000,  0x1000,
+factory,  app,  factory, 0x10000, 0x1E0000,

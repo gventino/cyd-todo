@@ -1,0 +1,228 @@
+/*
+ * cyd-todo on the CYD. The same components that the PC program runs (the UI, the theme, the QR, the model), the panel and
+ * the touch screen of the library's ESP32 backend, and the Wi-Fi setup (step A4.3). With CONFIG_TODO_SELFTEST it first
+ * draws every scene of the PC program through the real panel and prints the hash of each ("SCENE name palette hash"), to
+ * be compared with the goldens of firmware/pc/golden: the first proof that the board draws what the PC pinned.
+ */
+
+#include <inttypes.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "cydui/ui.h"
+#include "cydui_esp32.h"
+#include "esp_heap_caps.h"
+#include "esp_log.h"
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "nvs_flash.h"
+#include "scenes.h"
+#include "sdkconfig.h"
+#include "todo/app.h"
+#include "todo/memrepo.h"
+#include "todo/theme_quest.h"
+
+#define ROWS 20 /* rows per strip: two buffers of 12.8 KB */
+#define W 320
+#define H 240
+
+static const char *TAG = "cyd-todo";
+
+/* The UI's memory: what the PC's budget guard measured (320 commands, 1.5 KB of text, 64 state entries). */
+CYDUI_STORAGE(storage, W, H, 1, 320, 1536, 64);
+DMA_ATTR static cydui_color strips[2 * ROWS * W];
+static uint64_t dirty[(H + ROWS - 1) / ROWS];
+
+static cydui_esp32 dev;
+static cydui_ui ui;
+static cydui_theme theme;
+static todo_app *app;
+static todo_memrepo *repo;
+
+/* The clock of the UI: the real one, except in the self-test, where it is the made-up one of the PC's scenes. */
+static cydui_backend real_be, be;
+static bool virt_clock;
+static uint32_t virt_now;
+
+static uint32_t clock_ms(void *user)
+{
+    (void)user;
+    return virt_clock ? virt_now : real_be.now_ms(real_be.user);
+}
+
+static void heap_line(const char *where)
+{
+    printf("TODO_HEAP %s free=%u min=%u largest=%u\n", where, (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+           (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+}
+
+static bool start_ui(const cydui_theme *th)
+{
+    cydui_ui_config cfg = CYDUI_CONFIG(storage, &be, th);
+
+    cfg.core.strip_mem = strips;
+    cfg.core.strip_mem_size = sizeof(strips);
+    cfg.core.strip_buffers = 2;
+    cfg.core.dirty_mem = dirty;
+    cfg.core.dirty_mem_size = sizeof(dirty);
+    cfg.frame_budget_ms = 0;
+    memset(dirty, 0, sizeof(dirty));
+    if (cydui_ui_init(&ui, &cfg) != 0) {
+        ESP_LOGE(TAG, "cydui_ui_init failed");
+        return false;
+    }
+    return true;
+}
+
+static bool alloc_app(void)
+{
+    app = heap_caps_calloc(1, sizeof(*app), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    repo = heap_caps_calloc(1, sizeof(*repo), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    if (!app || !repo) {
+        ESP_LOGE(TAG, "no memory for the application (%u + %u bytes)", (unsigned)sizeof(*app), (unsigned)sizeof(*repo));
+        return false;
+    }
+    printf("TODO_SIZES app=%u repo=%u ui=%u\n", (unsigned)sizeof(*app), (unsigned)sizeof(*repo), (unsigned)sizeof(ui));
+    return true;
+}
+
+#if CONFIG_TODO_SELFTEST
+/* One scene exactly as pc/tests/test_scene_goldens.c draws it: 32 frames 16 ms apart, the scene applied at the 9th, then
+ * the hash of everything the last one sends (the strips are invalidated first, so that all of them are sent). */
+static void pin(const char *scene, todo_palette palette, bool worst)
+{
+    int i;
+
+    todo_memrepo_init(repo, SCENE_NOW);
+    scene_data(repo, worst);
+    todo_app_init(app, &repo->repo, SCENE_OFFSET);
+    app->palette = palette;
+    todo_theme_quest_init(&theme, palette);
+    virt_clock = true;
+    virt_now = 0;
+    if (!start_ui(&theme)) {
+        virt_clock = false;
+        return;
+    }
+    for (i = 0; i < 32; i++, virt_now += 16) {
+        if (i == 8 && !scene_apply(app, scene)) {
+            ESP_LOGE(TAG, "unknown scene %s", scene);
+        }
+        if (i == 31) {
+            cydui_invalidate(&ui.ctx);
+            cydui_esp32_hash_enable(&dev, true);
+        }
+        todo_app_set_time(app, SCENE_NOW + virt_now / 1000, true);
+        cydui_ui_begin(&ui, 0);
+        todo_app_frame(app, &ui);
+        cydui_ui_end(&ui);
+    }
+    cydui_esp32_hash_enable(&dev, false);
+    virt_clock = false;
+    printf("SCENE %s %s%s %016" PRIx64 " errors=0x%x\n", scene, palette == TODO_PALETTE_PARCHMENT ? "day" : "night", worst ? "_worst" : "",
+           cydui_esp32_hash(&dev), (unsigned)cydui_ui_errors(&ui));
+}
+
+static void selftest(void)
+{
+    int s, p;
+
+    for (s = 0; s < scene_count(); s++) {
+        for (p = 0; p < TODO_PALETTE_COUNT; p++) {
+            pin(scene_name(s), (todo_palette)p, false);
+        }
+    }
+    for (s = 0; s < scene_worst_count(); s++) {
+        pin(scene_worst_name(s), TODO_PALETTE_PARCHMENT, true);
+    }
+    heap_line("after the self-test");
+    printf("TODO_SELFTEST_DONE\n");
+}
+#endif
+
+static void calibrate(void)
+{
+    esp_err_t e = cydui_esp32_calibrate(&dev, &ui.ctx, &todo_serif_16, 60000);
+
+    printf("TODO_CALIBRATION result=%s\n", esp_err_to_name(e));
+}
+
+void app_main(void)
+{
+    cydui_esp32_config cfg = {.max_strip_bytes = ROWS * W * sizeof(cydui_color)};
+    esp_err_t e = nvs_flash_init();
+    int64_t last = esp_timer_get_time(), t_ui = 0, t_end = 0;
+    uint32_t n_frames = 0;
+
+    if (e == ESP_ERR_NVS_NO_FREE_PAGES || e == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        e = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(e);
+
+    heap_line("at start");
+    e = cydui_esp32_init(&dev, &cfg);
+    if (e != ESP_OK) {
+        ESP_LOGE(TAG, "the display did not start: %s", esp_err_to_name(e));
+        return;
+    }
+    real_be = *cydui_esp32_backend(&dev);
+    be = real_be;
+    be.now_ms = clock_ms;
+    if (!alloc_app()) {
+        return;
+    }
+    heap_line("after the backend and the application");
+#if CONFIG_TODO_SELFTEST
+    selftest();
+#endif
+
+    /* The application proper: the demo data and a fixed clock until the network arrives (step A5). */
+    todo_memrepo_init(repo, SCENE_NOW);
+    todo_memrepo_seed_demo(repo);
+    todo_app_init(app, &repo->repo, SCENE_OFFSET);
+    todo_theme_quest_init(&theme, app->palette);
+    if (!start_ui(&theme)) {
+        return;
+    }
+    cydui_ui_begin(&ui, 0);
+    todo_app_frame(app, &ui);
+    cydui_ui_end(&ui);
+    cydui_esp32_set_backlight(&dev, 100); /* only now, so that no garbage is ever seen */
+    if (cydui_esp32_touch_status(&dev) == ESP_OK) {
+        if (!cydui_esp32_calibrated(&dev)) {
+            calibrate();
+        }
+    } else {
+        ESP_LOGW(TAG, "no touch: %s", esp_err_to_name(cydui_esp32_touch_status(&dev)));
+    }
+    cydui_invalidate(&ui.ctx);
+    heap_line("running");
+
+    for (;;) {
+        int64_t a = esp_timer_get_time(), b, now;
+        bool more;
+
+        todo_app_set_time(app, SCENE_NOW + a / 1000000, true);
+        cydui_ui_begin(&ui, 0);
+        todo_app_frame(app, &ui);
+        b = esp_timer_get_time();
+        more = cydui_ui_end(&ui);
+        t_ui += b - a;
+        t_end += esp_timer_get_time() - b;
+        n_frames++;
+        now = esp_timer_get_time();
+        if (now - last > 5000000) {
+            printf("TODO_STATS frames=%" PRIu32 " ui_us=%" PRId64 " end_us=%" PRId64 " strips_sent=%" PRIu32 " free_heap=%u stack_left=%u\n", n_frames,
+                   n_frames ? t_ui / n_frames : 0, n_frames ? t_end / n_frames : 0, cydui_esp32_flushes(&dev),
+                   (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL), (unsigned)uxTaskGetStackHighWaterMark(NULL));
+            t_ui = t_end = 0;
+            n_frames = 0;
+            last = now;
+        }
+        if (!more && !cydui_esp32_wait(&dev, 250)) {
+            continue; /* a quarter of a second with nothing happening: a frame for the timers, no more */
+        }
+    }
+}

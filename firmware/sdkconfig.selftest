@@ -1,0 +1,3 @@
+# Adds the self-test: at boot the board draws every scene and prints its hash, to compare with the goldens of the PC.
+CONFIG_TODO_SELFTEST=y
+CONFIG_CYDUI_ESP32_PIXEL_HASH=y

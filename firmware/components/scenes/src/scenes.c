@@ -5,14 +5,6 @@
 
 #include "todo/datetime.h"
 
-CYDUI_STORAGE(board, 320, 240, 20, 320, 1536, 64);
-
-uint32_t board_ui_init(cydui_ui *ui, const cydui_backend *backend, const cydui_theme *theme)
-{
-    memset(&board, 0, sizeof(board));
-    return cydui_ui_init(ui, &CYDUI_CONFIG(board, backend, theme));
-}
-
 static int64_t at(int y, int m, int d, int hh, int mm)
 {
     return todo_local_midnight(y, m, d, SCENE_OFFSET) + hh * 3600 + mm * 60;
@@ -58,6 +50,18 @@ static const char *const NAMES[] = {"quests",  "calendar",     "calendar-six-row
 int scene_count(void)
 {
     return (int)(sizeof(NAMES) / sizeof(NAMES[0]));
+}
+
+static const char *const WORST[] = {"quests", "agenda", "detail-quest", "calendar-six-rows", "setup"};
+
+int scene_worst_count(void)
+{
+    return (int)(sizeof(WORST) / sizeof(WORST[0]));
+}
+
+const char *scene_worst_name(int i)
+{
+    return i >= 0 && i < scene_worst_count() ? WORST[i] : NULL;
 }
 
 const char *scene_name(int i)

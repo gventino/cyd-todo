@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "cydui_mem.h"
+#include "board_ui.h"
 #include "scenes.h"
 #include "todo/memrepo.h"
 #ifdef TODO_HAVE_SDL

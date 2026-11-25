@@ -3,6 +3,7 @@
 /server/*.db
 /server/*.db-*
 /firmware/build/
+/firmware/build-selftest/
 /firmware/pc/build*/
 /firmware/tools/.venv/
 /firmware/sdkconfig

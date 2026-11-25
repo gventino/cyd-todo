@@ -10,14 +10,21 @@
 #include "todo/repo.h"
 
 #define TODO_MEM_QUEUE 8
+/* How many quests and events the pretend server can hold (the board builds a small one: its heap is not for pretending). */
+#ifndef TODO_MEM_QUEST_CAP
+#define TODO_MEM_QUEST_CAP (TODO_MAX_QUESTS * 2)
+#endif
+#ifndef TODO_MEM_EVENT_CAP
+#define TODO_MEM_EVENT_CAP (TODO_MAX_EVENTS * 2)
+#endif
 
 typedef struct {
     todo_repo repo; /* hand &mem.repo to the UI */
 
     /* the pretend server */
-    todo_quest quests[TODO_MAX_QUESTS * 2];
+    todo_quest quests[TODO_MEM_QUEST_CAP];
     int n_quests;
-    todo_event events[TODO_MAX_EVENTS * 2];
+    todo_event events[TODO_MEM_EVENT_CAP];
     int n_events;
     int32_t next_id;
     int64_t rev;

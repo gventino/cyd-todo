@@ -79,7 +79,7 @@ static bool quest_before(const todo_quest *a, const todo_quest *b)
 static void read_quests(todo_memrepo *m, todo_store *s)
 {
     int i, j, n = 0;
-    static int order[TODO_MAX_QUESTS * 2];
+    static int order[TODO_MEM_QUEST_CAP];
 
     s->xp = s->open = s->done = 0;
     for (i = 0; i < m->n_quests; i++) {
@@ -109,7 +109,7 @@ static void read_quests(todo_memrepo *m, todo_store *s)
 static void read_events(todo_memrepo *m, todo_store *s, int64_t from, int64_t to)
 {
     int i, j, n = 0;
-    static int order[TODO_MAX_EVENTS * 2];
+    static int order[TODO_MEM_EVENT_CAP];
 
     for (i = 0; i < m->n_events; i++) {
         if (m->events[i].start < to && m->events[i].end > from) {

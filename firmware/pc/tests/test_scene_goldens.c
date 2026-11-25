@@ -7,6 +7,7 @@
 
 #include "cydui_mem.h"
 #include "rig.h"
+#include "board_ui.h"
 #include "scenes.h"
 #include "unity.h"
 
@@ -72,10 +73,9 @@ static void test_every_scene_with_the_demo_data_in_both_palettes(void)
 
 static void test_the_scenes_that_stress_the_layout_with_the_worst_case_data(void)
 {
-    static const char *const stress[] = {"quests", "agenda", "detail-quest", "calendar-six-rows", "setup"};
-    size_t i;
-    for (i = 0; i < sizeof(stress) / sizeof(stress[0]); i++) {
-        pin(stress[i], TODO_PALETTE_PARCHMENT, true);
+    int i;
+    for (i = 0; i < scene_worst_count(); i++) {
+        pin(scene_worst_name(i), TODO_PALETTE_PARCHMENT, true);
     }
 }
 

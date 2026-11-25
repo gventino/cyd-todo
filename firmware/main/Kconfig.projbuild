@@ -1,0 +1,11 @@
+menu "cyd-todo"
+
+    config TODO_SELFTEST
+        bool "Self-test: print the hash of every scene at boot"
+        default n
+        help
+            Draws every named scene of the PC program in both palettes through the real panel and prints
+            "SCENE <name> <day|night> <hash>", to compare with firmware/pc/golden (tools/board_hashes.sh).
+            Needs CYDUI_ESP32_PIXEL_HASH. Uses about 70 KB more heap for the pretend server of the worst-case scenes.
+
+endmenu
