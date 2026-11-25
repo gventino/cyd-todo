@@ -338,3 +338,23 @@ async fn the_access_log_has_no_token_no_query_no_body() {
     assert!(log[2].starts_with("GET /quests 200 "), "{}", log[2]);
     assert!(log[4].starts_with("GET /health 200 "), "{}", log[4]);
 }
+
+#[tokio::test]
+async fn a_refusal_is_logged_with_its_class_and_never_with_what_was_sent() {
+    let e = env().await;
+    e.get("/events?from=1700000000&to=1800000000").await; // a window of 1157 days
+    e.get("/events?from=5&to=6").await; // before the year 2000
+    e.send("GET", "/quests", None, Some("not-the-token-not-the-token-not-the-token")).await;
+    e.get("/quests/999").await;
+    e.get("/quests").await;
+    let log = e.log.lock().unwrap().clone();
+    assert_eq!(log.len(), 5);
+    assert!(log[0].starts_with("GET /events 422 ") && log[0].ends_with(" invalid"), "{}", log[0]);
+    assert!(log[1].ends_with(" invalid"), "{}", log[1]);
+    assert!(log[2].ends_with(" unauthorized"), "{}", log[2]);
+    assert!(log[3].ends_with(" not_found"), "{}", log[3]);
+    assert!(log[4].ends_with("ms"), "a success says nothing more: {}", log[4]);
+    for line in &log {
+        assert!(!line.contains("1700000000") && !line.contains("from="), "the query is not logged: {line}");
+    }
+}

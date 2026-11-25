@@ -10,6 +10,8 @@
 #define ERROR_MS 5000u
 #define TOAST_MS 2200u
 #define ANSWERS_PER_FRAME 4
+#define EPOCH_FIRST 946684800LL  /* 2000-01-01, the first time the server accepts */
+#define EPOCH_LAST 4102444799LL  /* the last one: 2100-01-01 is outside */
 
 void todo_app_init(todo_app *a, todo_repo *repo, int off_min)
 {
@@ -130,6 +132,13 @@ static bool request_events(todo_app *a)
     todo_month_window(a->cal_year, a->cal_month, a->off_min, &from, &to);
     q.a = from - 7 * TODO_DAY;
     q.b = to + 7 * TODO_DAY;
+    /* the server takes times in [2000-01-01, 2100-01-01): at the two ends of the calendar the week of margin must not cross them */
+    if (q.a < EPOCH_FIRST) {
+        q.a = EPOCH_FIRST;
+    }
+    if (q.b > EPOCH_LAST) {
+        q.b = EPOCH_LAST;
+    }
     if (!app_submit(a, &q)) {
         return false;
     }

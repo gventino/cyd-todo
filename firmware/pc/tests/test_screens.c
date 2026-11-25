@@ -849,6 +849,30 @@ static void test_settings_shows_the_network_the_platform_names(void)
     TEST_ASSERT_EQUAL_STRING("", W.app.wifi_name);
 }
 
+static void test_the_events_window_never_asks_for_what_the_server_refuses(void)
+{
+    static const int zones[] = {-720, -180, 0, 330, 840};
+    static const int months[][2] = {{2000, 1}, {2000, 2}, {2026, 12}, {2099, 11}, {2099, 12}};
+    size_t z, m;
+    for (z = 0; z < sizeof(zones) / sizeof(zones[0]); z++) {
+        for (m = 0; m < sizeof(months) / sizeof(months[0]); m++) {
+            char msg[64];
+            world_start(&W, TODO_PALETTE_PARCHMENT, true);
+            W.app.off_min = zones[z];
+            world_frames(&W, 6);
+            W.app.cal_year = months[m][0];
+            W.app.cal_month = months[m][1];
+            W.app.events_dirty = true;
+            world_frames(&W, 6);
+            snprintf(msg, sizeof(msg), "%d-%02d at %d", months[m][0], months[m][1], zones[z]);
+            TEST_ASSERT_TRUE_MESSAGE(W.app.store.events_from >= 946684800LL, msg);
+            TEST_ASSERT_TRUE_MESSAGE(W.app.store.events_to <= 4102444799LL, msg);
+            TEST_ASSERT_TRUE_MESSAGE(W.app.store.events_to > W.app.store.events_from, msg);
+            TEST_ASSERT_TRUE_MESSAGE(W.app.store.events_to - W.app.store.events_from <= 62 * 86400LL, msg);
+        }
+    }
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -893,6 +917,7 @@ int main(void)
     RUN_TEST(test_change_wifi_asks_the_platform_for_an_access_point_once);
     RUN_TEST(test_with_a_platform_that_makes_the_access_point_the_page_waits_for_it);
     RUN_TEST(test_cancelling_the_setup_tells_the_platform_and_try_again_asks_again);
+    RUN_TEST(test_the_events_window_never_asks_for_what_the_server_refuses);
     RUN_TEST(test_the_platform_can_close_the_setup_page_when_it_has_joined_a_network);
     RUN_TEST(test_the_status_line_says_when_the_radio_is_joining_a_network);
     RUN_TEST(test_settings_shows_the_network_the_platform_names);

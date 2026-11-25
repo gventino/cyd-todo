@@ -81,11 +81,13 @@ pub fn app(state: Arc<AppState>) -> impl Endpoint {
 }
 
 /// What one request leaves in the log: the method, the path made printable, the status, how long.
-fn log_line(method: &Method, path: &str, status: StatusCode, started: Instant) -> String {
+fn log_line(method: &Method, path: &str, status: StatusCode, started: Instant, reason: Option<&'static str>) -> String {
     // the code of a one-time link is a credential: it never reaches the log
     let path = if path.starts_with("/m/") { "/m/:code" } else { path };
     let clean: String = path.chars().take(64).map(|c| if c.is_ascii_graphic() { c } else { '?' }).collect();
-    format!("{method} {clean} {} {}ms", status.as_u16(), started.elapsed().as_millis())
+    // the class of a refusal ("invalid", "unauthorized", ...) is one of our fixed words: it says why without saying what was sent
+    let reason = reason.map(|r| format!(" {r}")).unwrap_or_default();
+    format!("{method} {clean} {} {}ms{reason}", status.as_u16(), started.elapsed().as_millis())
 }
 
 /// Which door a request came through: `/health` is open, `/m/..` and `/app..` are the phone side (a link and a
@@ -102,6 +104,7 @@ async fn guard<E: Endpoint>(next: E, req: Request) -> poem::Result<Response> {
     let method = req.method().clone();
     let path = req.uri().path().to_string();
 
+    let mut reason: Option<&'static str> = None;
     let resp = if is_phone_side(&path) {
         let r = match next.call(req).await {
             Ok(r) => r.into_response(),
@@ -111,10 +114,11 @@ async fn guard<E: Endpoint>(next: E, req: Request) -> poem::Result<Response> {
     } else if method == Method::GET && path == "/health" || authorized(&req, &state.token) {
         let genuine = match next.call(req).await {
             Ok(r) => r.into_response(),
-            Err(e) => match e.downcast_ref::<ApiError>() {
-                Some(api) => api.to_response(),
-                None => ApiError::from_status(e.status()).to_response(),
-            },
+            Err(e) => {
+                let api = e.downcast_ref::<ApiError>().cloned().unwrap_or_else(|| ApiError::from_status(e.status()));
+                reason = Some(api.code());
+                api.to_response()
+            }
         };
         match state.fault {
             Some(fault) if path != "/health" => crate::faults::apply(fault, state.fault_slow, genuine).await,
@@ -122,9 +126,10 @@ async fn guard<E: Endpoint>(next: E, req: Request) -> poem::Result<Response> {
         }
     } else {
         tokio::time::sleep(state.auth_delay).await;
+        reason = Some("unauthorized");
         ApiError::unauthorized().to_response()
     };
-    (state.log)(log_line(&method, &path, resp.status(), started));
+    (state.log)(log_line(&method, &path, resp.status(), started, reason));
     Ok(resp)
 }
 
