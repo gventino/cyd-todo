@@ -42,12 +42,12 @@ No board? The same screens run on your PC: see "Firmware, PC build" below.
 | Path | What |
 |---|---|
 | `server/` | Rust: `poem`, `sqlx`, SQLite. The device API and the phone pages (`server/README.md`). |
-| `firmware/` | ESP-IDF 5.5 application in C99, and a PC build (SDL) for development and tests. `third_party/cydui` is the UI library, pinned to a release tag (v1.0.0-rc.2). |
+| `firmware/` | ESP-IDF 5.5 application in C99, and a PC build (SDL) for development and tests. `third_party/cydui` is the UI library, pinned to a release tag (v1.0.0). |
 | `scripts/dev.sh` | One entry point to try it: doctor, setup, server, board, phone links, firewall hint. |
 | `docs/api.md` | The contract between the board, the phone and the server, with its limits. |
 | `docs/design.md` | Screens, data, setup flow, sync, memory, measurements. |
 | `docs/threat.md` | A short threat model and the state of each control. |
-| `docs/findings.md` | What the library got wrong or made hard (it fed [cydui](https://github.com/gventino/cydui) 1.0.0-rc.2). |
+| `docs/findings.md` | What the library got wrong or made hard (it fed [cydui](https://github.com/gventino/cydui) 1.0.0). |
 
 ## Why this exists
 It is the real application that had to prove the API of [cydui](https://github.com/gventino/cydui), an immediate-mode UI library for the CYD, before that library's 1.0.0: a to-do list with a server, a phone and a Wi-Fi setup that exercises lists, popups, themes, animations, QR codes and a network under bad conditions (every fault the server can inject was survived on the board). If you are looking for an example of a **complete CYD project**, not a demo, this is meant to be it.
