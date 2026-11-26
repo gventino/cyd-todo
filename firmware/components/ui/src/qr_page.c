@@ -92,6 +92,24 @@ void app_request_setup(todo_app *a)
     }
 }
 
+void todo_app_get_settings(const todo_app *a, todo_settings *out)
+{
+    out->zone_min = (int16_t)a->off_min;
+    out->backlight = (uint8_t)a->backlight_index;
+    out->palette = (uint8_t)a->palette;
+}
+
+void todo_app_apply_settings(todo_app *a, const todo_settings *s)
+{
+    if (!todo_settings_valid(s)) {
+        return;
+    }
+    a->off_min = s->zone_min;
+    a->backlight_index = s->backlight;
+    a->palette = s->palette == 1 ? TODO_PALETTE_CANDLELIGHT : TODO_PALETTE_PARCHMENT;
+    a->events_dirty = true; /* the zone may differ from the one the first window was asked for */
+}
+
 void todo_app_refresh_now(todo_app *a)
 {
     a->quests_dirty = true;

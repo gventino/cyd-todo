@@ -20,6 +20,7 @@
 #include "freertos/task.h"
 #include "nvs_flash.h"
 #include "scenes.h"
+#include "settings_store.h"
 #include "sdkconfig.h"
 #include "prov/bootflow.h"
 #include "todo/app.h"
@@ -211,6 +212,30 @@ static void sync_net(void)
     }
 }
 
+/* Settings are saved two seconds after the last change (an arrow held down is one write), and only if the flash says something else. */
+static void save_settings_when_they_stop_changing(uint32_t now)
+{
+    static todo_debounce deb;
+    static uint32_t seen_rev;
+    static bool first = true;
+
+    if (first) {
+        todo_debounce_init(&deb);
+        seen_rev = app->settings_rev;
+        first = false;
+    }
+    if (app->settings_rev != seen_rev) {
+        seen_rev = app->settings_rev;
+        todo_debounce_change(&deb, now);
+    }
+    if (todo_debounce_due(&deb, now, 2000)) {
+        todo_settings st;
+        todo_app_get_settings(app, &st);
+        printf("TODO_SETTINGS %s zone=%d backlight=%u palette=%u\n", settings_store_save(&st) ? "saved" : "unchanged", st.zone_min, (unsigned)st.backlight,
+               (unsigned)st.palette);
+    }
+}
+
 static void calibrate(void)
 {
     esp_err_t e = cydui_esp32_calibrate(&dev, &ui.ctx, &todo_serif_16, 60000);
@@ -254,6 +279,16 @@ void app_main(void)
         return;
     }
     todo_app_init(app, netsync_repo(), CONFIG_TODO_DEFAULT_TZ_MIN);
+    {   /* what the owner set last time (the zone of the build is only the default of a board that has saved nothing) */
+        todo_settings st;
+        todo_settings_default(&st, CONFIG_TODO_DEFAULT_TZ_MIN);
+        if (settings_store_load(&st)) {
+            printf("TODO_SETTINGS loaded zone=%d backlight=%u palette=%u\n", st.zone_min, (unsigned)st.backlight, (unsigned)st.palette);
+        } else {
+            printf("TODO_SETTINGS none saved: defaults zone=%d backlight=%u palette=%u\n", st.zone_min, (unsigned)st.backlight, (unsigned)st.palette);
+        }
+        todo_app_apply_settings(app, &st); /* before the theme is made, so that the first picture is in the right palette */
+    }
     todo_theme_quest_init(&theme, app->palette);
     if (!start_ui(&theme)) {
         return;
@@ -288,6 +323,7 @@ void app_main(void)
             todo_app_set_time(app, valid ? epoch : 0, valid);
         }
         sync_net();
+        save_settings_when_they_stop_changing((uint32_t)(esp_timer_get_time() / 1000));
         cydui_ui_begin(&ui, 0);
         todo_app_frame(app, &ui);
         b = esp_timer_get_time();

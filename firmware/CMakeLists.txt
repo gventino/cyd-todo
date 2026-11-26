@@ -15,7 +15,8 @@ set(EXTRA_COMPONENT_DIRS
     ${CMAKE_CURRENT_LIST_DIR}/components/netsetup
     ${CMAKE_CURRENT_LIST_DIR}/components/jsonr
     ${CMAKE_CURRENT_LIST_DIR}/components/netrepo
-    ${CMAKE_CURRENT_LIST_DIR}/components/netsync)
+    ${CMAKE_CURRENT_LIST_DIR}/components/netsync
+    ${CMAKE_CURRENT_LIST_DIR}/components/settings)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(cyd-todo)

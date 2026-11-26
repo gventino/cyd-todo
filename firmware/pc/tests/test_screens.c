@@ -800,6 +800,54 @@ static void test_cancelling_the_setup_tells_the_platform_and_try_again_asks_agai
     TEST_ASSERT_EQUAL_INT(TODO_EVT_SETUP_REQUESTED, todo_app_take_event(&W.app));
 }
 
+static void test_the_settings_revision_moves_on_a_real_change_and_only_then(void)
+{
+    uint32_t r0;
+    open_settings(TODO_PALETTE_PARCHMENT);
+    r0 = W.app.settings_rev;
+    world_frames(&W, 10);
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(r0, W.app.settings_rev, "frames alone change nothing");
+    world_tap(&W, SET_NEXT_X, SET_ZONE_Y);
+    TEST_ASSERT_EQUAL_UINT32(r0 + 1, W.app.settings_rev);
+    world_tap(&W, SET_NEXT_X, SET_BACKLIGHT_Y);
+    TEST_ASSERT_EQUAL_UINT32(r0 + 2, W.app.settings_rev);
+    world_tap(&W, 160, SET_THEME_Y);
+    TEST_ASSERT_EQUAL_UINT32(r0 + 3, W.app.settings_rev);
+    world_tap(&W, 160, 50); /* the Wi-Fi row only shows */
+    world_tap(&W, 160, 80); /* and so does the server row */
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(r0 + 3, W.app.settings_rev, "rows that only show do not count");
+}
+
+static void test_saved_settings_are_in_force_from_the_first_frame(void)
+{
+    todo_settings s = {-120, 3, 1}, got;
+    char st[48];
+    int64_t from, to;
+    world_start(&W, TODO_PALETTE_CANDLELIGHT, true);
+    todo_app_apply_settings(&W.app, &s);
+    world_frames(&W, 8);
+    todo_app_get_settings(&W.app, &got);
+    TEST_ASSERT_EQUAL_INT(-120, got.zone_min);
+    TEST_ASSERT_EQUAL_UINT8(3, got.backlight);
+    TEST_ASSERT_EQUAL_UINT8(1, got.palette);
+    TEST_ASSERT_EQUAL_INT(TODO_PALETTE_CANDLELIGHT, W.app.palette);
+    todo_app_status_text(&W.app, st, sizeof(st));
+    TEST_ASSERT_EQUAL_STRING_MESSAGE("Synced 15:00", st, "17:00 UTC is 15:00 two hours west");
+    todo_month_window(2026, 12, -120, &from, &to);
+    TEST_ASSERT_EQUAL_INT64_MESSAGE(from - 7 * TODO_DAY, W.app.store.events_from, "the events were asked for in that zone");
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, W.app.settings_rev, "loading is not a change: nothing to save");
+}
+
+static void test_settings_that_are_not_valid_are_not_applied(void)
+{
+    todo_settings bad = {-181, 1, 0}, got;
+    world_start(&W, TODO_PALETTE_PARCHMENT, true);
+    todo_app_apply_settings(&W.app, &bad);
+    todo_app_get_settings(&W.app, &got);
+    TEST_ASSERT_EQUAL_INT(WORLD_OFFSET, got.zone_min);
+    TEST_ASSERT_EQUAL_UINT8(1, got.backlight);
+}
+
 static void test_the_platform_can_close_the_setup_page_when_it_has_joined_a_network(void)
 {
     world_start(&W, TODO_PALETTE_PARCHMENT, true);
@@ -918,6 +966,9 @@ int main(void)
     RUN_TEST(test_with_a_platform_that_makes_the_access_point_the_page_waits_for_it);
     RUN_TEST(test_cancelling_the_setup_tells_the_platform_and_try_again_asks_again);
     RUN_TEST(test_the_events_window_never_asks_for_what_the_server_refuses);
+    RUN_TEST(test_the_settings_revision_moves_on_a_real_change_and_only_then);
+    RUN_TEST(test_saved_settings_are_in_force_from_the_first_frame);
+    RUN_TEST(test_settings_that_are_not_valid_are_not_applied);
     RUN_TEST(test_the_platform_can_close_the_setup_page_when_it_has_joined_a_network);
     RUN_TEST(test_the_status_line_says_when_the_radio_is_joining_a_network);
     RUN_TEST(test_settings_shows_the_network_the_platform_names);

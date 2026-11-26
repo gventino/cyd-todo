@@ -3,30 +3,26 @@
 #include <stdio.h>
 
 #include "internal.h"
-
-/* The zones the list goes through, minutes east of UTC. */
-static const int16_t ZONES[] = {-720, -660, -600, -570, -540, -480, -420, -360, -300, -240, -210, -180, -120, -60, 0, 60, 120, 180, 210, 240,
-                                270,  300,  330,  345,  360,  390,  420,  480,  525,  540,  570,  600,  630,  660, 720, 765, 780, 840};
-#define ZONE_COUNT ((int)(sizeof(ZONES) / sizeof(ZONES[0])))
+#include "todo/settings.h"
 
 int tz_step(int off_min, int dir)
 {
     int i;
 
     if (dir > 0) {
-        for (i = 0; i < ZONE_COUNT; i++) {
-            if (ZONES[i] > off_min) {
-                return ZONES[i];
+        for (i = 0; i < todo_zone_count(); i++) {
+            if (todo_zone_at(i) > off_min) {
+                return todo_zone_at(i);
             }
         }
-        return ZONES[0];
+        return todo_zone_at(0);
     }
-    for (i = ZONE_COUNT - 1; i >= 0; i--) {
-        if (ZONES[i] < off_min) {
-            return ZONES[i];
+    for (i = todo_zone_count() - 1; i >= 0; i--) {
+        if (todo_zone_at(i) < off_min) {
+            return todo_zone_at(i);
         }
     }
-    return ZONES[ZONE_COUNT - 1];
+    return todo_zone_at(todo_zone_count() - 1);
 }
 
 void tz_text(int off_min, char *out, size_t cap)
@@ -59,14 +55,17 @@ void screen_settings(todo_app *a, cydui_ui *ui)
     d = ui_setting_row(ui, a->palette, "Time zone", zone, ROW_ARROWS);
     if (d) {
         a->off_min = tz_step(a->off_min, d);
+        a->settings_rev++;
         app_want_events(a); /* the days shift, so the window of events does too */
     }
     d = ui_setting_row(ui, a->palette, "Backlight", backlight_text(a->backlight_index), ROW_ARROWS);
     if (d) {
         a->backlight_index = (a->backlight_index + d + backlight_count()) % backlight_count();
+        a->settings_rev++;
     }
     if (ui_setting_row(ui, a->palette, "Theme", a->palette == TODO_PALETTE_PARCHMENT ? "Day" : "Night", ROW_TAP)) {
         a->palette = a->palette == TODO_PALETTE_PARCHMENT ? TODO_PALETTE_CANDLELIGHT : TODO_PALETTE_PARCHMENT;
+        a->settings_rev++;
     }
     if (ui_setting_row(ui, a->palette, "Change Wi-Fi", "Start setup", ROW_TAP)) {
         a->overlay = TODO_OV_CONFIRM_WIFI;

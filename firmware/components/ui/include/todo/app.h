@@ -22,6 +22,7 @@
 #include "todo/model.h"
 #include "todo/qr.h"
 #include "todo/repo.h"
+#include "todo/settings.h"
 #include "todo/theme_quest.h"
 
 #define TODO_TOAST_MAX 40
@@ -54,6 +55,7 @@ typedef struct {
     int off_min;           /* the zone dates are shown in, minutes east of UTC */
     int backlight_index;   /* into the timeouts of the Settings tab; applied by the board */
     todo_palette palette;
+    uint32_t settings_rev; /* moves whenever one of the three changes, so that the board knows to save them */
 
     /* the clock, given by the caller */
     int64_t now; /* UTC epoch seconds */
@@ -145,6 +147,10 @@ void todo_app_refresh_now(todo_app *a);
 
 /* Closes the setup page, if it is the one on screen (the platform joined a network, or started to). */
 void todo_app_leave_setup(todo_app *a);
+
+/* The three settings that are saved, as they are now; and putting saved ones in (before the first frame). */
+void todo_app_get_settings(const todo_app *a, todo_settings *out);
+void todo_app_apply_settings(todo_app *a, const todo_settings *s);
 
 /* The text of the status line, for the frame at `ms`. */
 size_t todo_app_status_text(const todo_app *a, char *buf, size_t cap);
