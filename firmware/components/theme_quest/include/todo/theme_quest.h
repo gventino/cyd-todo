@@ -47,6 +47,8 @@ void todo_theme_quest_init(cydui_theme *t, todo_palette p);
 
 /* A card: a gold bar on the left while the quest is open; faded for a finished one. 3 commands. */
 void todo_paint_card(cydui_ctx *ctx, todo_palette p, cydui_rect r, bool done);
+/* A card part of the way from the open look (0) to the done look (255); the two ends are todo_paint_card exactly. */
+void todo_paint_card_mix(cydui_ctx *ctx, todo_palette p, cydui_rect r, int amount);
 /* The XP bar, `fraction` of TODO_FRACTION_ONE (4096) full. At most 4 commands. */
 void todo_paint_xp_bar(cydui_ctx *ctx, todo_palette p, cydui_rect r, int fraction);
 /* How many pixels of an inner width are filled at `fraction` of 4096 (clamped to 0..4096). */

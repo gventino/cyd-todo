@@ -2,6 +2,7 @@
  * directory to be looked at; goldens of scripted runs come later. */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "todo/datetime.h"
@@ -800,6 +801,91 @@ static void test_cancelling_the_setup_tells_the_platform_and_try_again_asks_agai
     TEST_ASSERT_EQUAL_INT(TODO_EVT_SETUP_REQUESTED, todo_app_take_event(&W.app));
 }
 
+/* the face of the first card, between its gold bar and its checkbox */
+static cydui_color card_face(void)
+{
+    return W.r.fb[CARD0_Y * RIG_W + 9];
+}
+
+/* a single quest, so that it stays where it is when it is completed (a list with more would move it to the done ones) */
+static void one_card_world(todo_palette p)
+{
+    world_start(&W, p, false);
+    todo_memrepo_add_quest(&W.mem, "Only one", "", 2, 0);
+    todo_app_refresh_now(&W.app);
+    world_frames(&W, 12);
+}
+
+static void tap_first_checkbox(void)
+{
+    rig_down(&W.r, CHECK_X, CARD0_Y);
+    world_frame(&W);
+    rig_up(&W.r, CHECK_X, CARD0_Y);
+    world_frame(&W);
+}
+
+/* how far apart two RGB565 colors are, channel by channel */
+static int color_distance(cydui_color a, cydui_color b)
+{
+    int dr = (a >> 11) - (b >> 11), dg = ((a >> 5) & 63) - ((b >> 5) & 63), db = (a & 31) - (b & 31);
+    return abs(dr) * 2 + abs(dg) + abs(db) * 2;
+}
+
+static void test_a_completed_card_eases_to_its_done_look_and_settles_on_it_exactly(void)
+{
+    const todo_colors *k = todo_colors_of(TODO_PALETTE_PARCHMENT);
+    cydui_color mid;
+    one_card_world(TODO_PALETTE_PARCHMENT);
+    TEST_ASSERT_EQUAL_HEX16(k->card, card_face());
+    tap_first_checkbox();
+    world_frames(&W, 2);
+    mid = card_face();
+    TEST_ASSERT_NOT_EQUAL_HEX16_MESSAGE(k->card, mid, "it has started to move");
+    TEST_ASSERT_NOT_EQUAL_HEX16_MESSAGE(k->card_done, mid, "and it is not there yet");
+    TEST_ASSERT_TRUE_MESSAGE(color_distance(mid, k->card_done) < color_distance(k->card, k->card_done), "it moves towards the done look");
+    TEST_ASSERT_TRUE_MESSAGE(color_distance(mid, k->card) > 0 && color_distance(mid, k->card) < color_distance(k->card, k->card_done), "and not past it");
+    {   /* every frame is closer to the done look than the one before, and the last one is exactly it */
+        int d = color_distance(mid, k->card_done), now, i;
+        for (i = 0; i < 14; i++) {
+            world_frame(&W); /* 16 ms each: well past 160 ms */
+            now = color_distance(card_face(), k->card_done);
+            TEST_ASSERT_TRUE_MESSAGE(now <= d, "it only moves one way");
+            d = now;
+        }
+    }
+    TEST_ASSERT_EQUAL_HEX16(k->card_done, card_face());
+    TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+}
+
+static void test_a_reopened_card_eases_back_and_quick_taps_end_on_the_last_look(void)
+{
+    const todo_colors *k = todo_colors_of(TODO_PALETTE_CANDLELIGHT);
+    one_card_world(TODO_PALETTE_CANDLELIGHT);
+    tap_first_checkbox();
+    world_frames(&W, 14);
+    TEST_ASSERT_EQUAL_HEX16(k->card_done, card_face());
+    tap_first_checkbox(); /* done, then reopened, then done again, faster than the animation */
+    tap_first_checkbox();
+    tap_first_checkbox();
+    world_frames(&W, 20);
+    TEST_ASSERT_TRUE(W.app.store.quests[0].done == (card_face() == k->card_done));
+    TEST_ASSERT_TRUE_MESSAGE(card_face() == k->card_done || card_face() == k->card, "never left between the looks once settled");
+    TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+}
+
+static void test_cards_that_are_already_done_when_the_list_arrives_do_not_animate(void)
+{
+    static cydui_color before[RIG_W * RIG_H];
+    int i;
+    world_start(&W, TODO_PALETTE_PARCHMENT, true);
+    world_frames(&W, 40); /* the demo list has done quests too: they are on screen once it has arrived */
+    memcpy(before, W.r.fb, sizeof(before));
+    world_frames(&W, 20);
+    for (i = 0; i < RIG_W * RIG_H; i++) {
+        TEST_ASSERT_EQUAL_HEX16_MESSAGE(before[i], W.r.fb[i], "nothing moves after the list has settled");
+    }
+}
+
 static void test_the_settings_revision_moves_on_a_real_change_and_only_then(void)
 {
     uint32_t r0;
@@ -966,6 +1052,9 @@ int main(void)
     RUN_TEST(test_with_a_platform_that_makes_the_access_point_the_page_waits_for_it);
     RUN_TEST(test_cancelling_the_setup_tells_the_platform_and_try_again_asks_again);
     RUN_TEST(test_the_events_window_never_asks_for_what_the_server_refuses);
+    RUN_TEST(test_a_completed_card_eases_to_its_done_look_and_settles_on_it_exactly);
+    RUN_TEST(test_a_reopened_card_eases_back_and_quick_taps_end_on_the_last_look);
+    RUN_TEST(test_cards_that_are_already_done_when_the_list_arrives_do_not_animate);
     RUN_TEST(test_the_settings_revision_moves_on_a_real_change_and_only_then);
     RUN_TEST(test_saved_settings_are_in_force_from_the_first_frame);
     RUN_TEST(test_settings_that_are_not_valid_are_not_applied);

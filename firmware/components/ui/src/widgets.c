@@ -60,7 +60,9 @@ bool ui_quest_card(cydui_ui *ui, todo_palette pal, const todo_quest *q, int32_t 
     *toggle = rc.clicked;
     *open = rt.clicked;
 
-    todo_paint_card(&ui->ctx, pal, r, q->done);
+    /* the card eases between its two looks when `done` changes; a card that appears already done is simply done */
+    todo_paint_card_mix(&ui->ctx, pal, r,
+                        (int)cydui_animate(ui, cydui_id_str(ui, "mix"), q->done ? 255 : 0, q->done ? 255 : 0, 160, CYDUI_EASE_OUT_CUBIC));
 
     memset(&pi, 0, sizeof(pi));
     pi.kind = CYDUI_WIDGET_CHECKBOX;

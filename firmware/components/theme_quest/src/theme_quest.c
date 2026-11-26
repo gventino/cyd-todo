@@ -229,14 +229,22 @@ void todo_theme_quest_init(cydui_theme *t, todo_palette p)
 
 /* ---- the helpers ---- */
 
-void todo_paint_card(cydui_ctx *ctx, todo_palette p, cydui_rect r, bool done)
+void todo_paint_card_mix(cydui_ctx *ctx, todo_palette p, cydui_rect r, int amount)
 {
     const todo_colors *k = todo_colors_of(p);
+    cydui_color face;
 
-    boxed(ctx, r, 1, k->wood_light, done ? k->card_done : k->card);
-    if (!done) {
-        fill(ctx, (cydui_rect){(int16_t)(r.x + 1), (int16_t)(r.y + 1), 3, (int16_t)(r.h > 2 ? r.h - 2 : 0)}, k->gold);
+    amount = amount < 0 ? 0 : (amount > 255 ? 255 : amount);
+    face = amount == 0 ? k->card : (amount == 255 ? k->card_done : cydui_blend(k->card, k->card_done, (uint8_t)amount));
+    boxed(ctx, r, 1, k->wood_light, face);
+    if (amount < 255) {
+        cydui_draw_rect(ctx, (cydui_rect){(int16_t)(r.x + 1), (int16_t)(r.y + 1), 3, (int16_t)(r.h > 2 ? r.h - 2 : 0)}, k->gold, (uint8_t)(255 - amount));
     }
+}
+
+void todo_paint_card(cydui_ctx *ctx, todo_palette p, cydui_rect r, bool done)
+{
+    todo_paint_card_mix(ctx, p, r, done ? 255 : 0);
 }
 
 int todo_xp_bar_width(int inner_w, int fraction)
