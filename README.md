@@ -8,6 +8,10 @@
 |---|---|---|---|
 | ![](docs/img/quests-day.png) | ![](docs/img/calendar-day.png) | ![](docs/img/agenda-day.png) | ![](docs/img/qr-quest-day.png) |
 
+## See it running
+
+Filmed on the real board: [the quests and the calendar](docs/media/board-quests-and-calendar.mp4) (30 seconds of taps on the checkboxes, the calendar and an agenda) and [writing a quest on the phone](docs/media/phone-qr-to-board.mp4) (the QR code on the board, the phone page, and the new quest showing up on the screen).
+
 ## How it works
 
 ```
