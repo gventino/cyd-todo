@@ -126,7 +126,7 @@ async fn the_session_cookie_has_the_attributes_that_protect_it() {
     assert!(set.starts_with("sid="), "{set}");
     let sid = set.split(';').next().unwrap().trim_start_matches("sid=");
     assert_eq!(sid.len(), 26);
-    for attr in ["HttpOnly", "SameSite=Strict", "Path=/", "Max-Age=1800"] {
+    for attr in ["HttpOnly", "SameSite=Lax", "Path=/", "Max-Age=1800"] {
         assert!(set.contains(attr), "{attr} missing in {set}");
     }
     assert!(!set.contains("Secure"), "plain HTTP in development: Secure comes with https");

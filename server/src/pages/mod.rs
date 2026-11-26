@@ -122,7 +122,7 @@ pub fn harden(mut resp: Response, state: &AppState) -> Response {
 }
 
 pub fn session_cookie(sid: &str, secure: bool) -> String {
-    let mut c = format!("sid={sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age={SESSION_TTL}");
+    let mut c = format!("sid={sid}; HttpOnly; SameSite=Lax; Path=/; Max-Age={SESSION_TTL}");
     if secure {
         c.push_str("; Secure");
     }
@@ -130,7 +130,7 @@ pub fn session_cookie(sid: &str, secure: bool) -> String {
 }
 
 pub fn clear_cookie(secure: bool) -> String {
-    let mut c = String::from("sid=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0");
+    let mut c = String::from("sid=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0");
     if secure {
         c.push_str("; Secure");
     }

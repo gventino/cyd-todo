@@ -80,7 +80,7 @@ Server-rendered, **no JavaScript at all**, one inlined stylesheet, made for a ph
 
 | Route | What |
 |---|---|
-| `GET /m/{code}` | Trades a valid one-time code for a session cookie (`sid`, `HttpOnly`, `SameSite=Strict`, `Path=/`, `Max-Age=1800`, plus `Secure` when `PUBLIC_URL` is https) and redirects (303) to the page of its `kind`: `/app/quests/new`, `/app/events/new` or `/app`. A code that is malformed, unknown, used or expired is **one and the same** plain 404 page, after the same 200 ms as a wrong token. |
+| `GET /m/{code}` | Trades a valid one-time code for a session cookie (`sid`, `HttpOnly`, `SameSite=Lax`, `Path=/`, `Max-Age=1800`, plus `Secure` when `PUBLIC_URL` is https) and redirects (303) to the page of its `kind`: `/app/quests/new`, `/app/events/new` or `/app`. A code that is malformed, unknown, used or expired is **one and the same** plain 404 page, after the same 200 ms as a wrong token. |
 | `GET /app` | Home: the open quests, a button for a new one, *Leave*. |
 | `GET /app/quests`, `GET /app/quests/new`, `POST /app/quests` | The list (open first, at most 48), the new-quest form (title, notes, difficulty, due date), its submission. |
 | `GET /app/quests/{id}/edit`, `POST /app/quests/{id}` | Edit. |
