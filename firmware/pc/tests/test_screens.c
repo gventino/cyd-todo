@@ -886,6 +886,90 @@ static void test_cards_that_are_already_done_when_the_list_arrives_do_not_animat
     }
 }
 
+/* the toast's top edge (gold_dark when opaque), and what is behind it */
+#define TOAST_PX_X 160
+#define TOAST_PX_Y 192
+
+static void test_the_toast_is_opaque_then_fades_out_over_its_last_300_ms_and_leaves_nothing(void)
+{
+    const todo_colors *k = todo_colors_of(TODO_PALETTE_PARCHMENT);
+    cydui_color behind, faded;
+    int i;
+    one_card_world(TODO_PALETTE_PARCHMENT);
+    behind = W.r.fb[TOAST_PX_Y * RIG_W + TOAST_PX_X];
+    tap_first_checkbox();
+    world_frames(&W, 3);
+    TEST_ASSERT_EQUAL_STRING("+20 XP", W.app.toast);
+    TEST_ASSERT_EQUAL_HEX16(k->gold_dark, W.r.fb[TOAST_PX_Y * RIG_W + TOAST_PX_X]);
+    world_frames(&W, 100); /* about 1.7 s in: still fully there */
+    TEST_ASSERT_EQUAL_HEX16(k->gold_dark, W.r.fb[TOAST_PX_Y * RIG_W + TOAST_PX_X]);
+    for (i = 0; i < 20 && W.app.ms < W.app.toast_until - 150; i++) {
+        world_frame(&W);
+    }
+    faded = W.r.fb[TOAST_PX_Y * RIG_W + TOAST_PX_X];
+    TEST_ASSERT_NOT_EQUAL_HEX16_MESSAGE(k->gold_dark, faded, "half way through the fade it is not opaque");
+    TEST_ASSERT_NOT_EQUAL_HEX16_MESSAGE(behind, faded, "and not gone");
+    world_frames(&W, 40);
+    TEST_ASSERT_EQUAL_HEX16_MESSAGE(behind, W.r.fb[TOAST_PX_Y * RIG_W + TOAST_PX_X], "afterwards the screen is as it was");
+    TEST_ASSERT_EQUAL_UINT32(0, W.errors);
+}
+
+static void test_a_second_toast_is_opaque_from_its_first_frame(void)
+{
+    const todo_colors *k = todo_colors_of(TODO_PALETTE_PARCHMENT);
+    one_card_world(TODO_PALETTE_PARCHMENT);
+    tap_first_checkbox();
+    world_frames(&W, 160); /* the first toast has come and gone */
+    tap_first_checkbox();  /* reopened: no toast; complete it again for a second one */
+    world_frames(&W, 20);
+    tap_first_checkbox();
+    world_frames(&W, 2);
+    TEST_ASSERT_TRUE(W.app.toast[0] != 0 && W.app.ms < W.app.toast_until);
+    TEST_ASSERT_EQUAL_HEX16(k->gold_dark, W.r.fb[TOAST_PX_Y * RIG_W + TOAST_PX_X]);
+}
+
+/* the left edge of the gold frame that pulses round the XP bar: nothing else is drawn in that column */
+static int frame_column_changes(const cydui_color *a, const cydui_color *b)
+{
+    int y, n = 0;
+    for (y = 36; y < 60; y++) { /* the header: the cards start below */
+        n += a[y * RIG_W + 53] != b[y * RIG_W + 53];
+    }
+    return n;
+}
+
+static void test_a_level_up_pulses_gold_round_the_bar_and_it_is_gone_after_half_a_second(void)
+{
+    static cydui_color at_tap[RIG_W * RIG_H], at_end[RIG_W * RIG_H];
+    world_start(&W, TODO_PALETTE_PARCHMENT, true);
+    todo_memrepo_add_quest(&W.mem, "Epic", "", 5, 20261203);
+    world_frames(&W, 6);
+    W.app.store.xp = 80;
+    W.app.store.quests[0].difficulty = 3;
+    memcpy(at_tap, W.r.fb, sizeof(at_tap));
+    tap_first_checkbox();
+    world_frames(&W, 2);
+    TEST_ASSERT_TRUE_MESSAGE(frame_column_changes(at_tap, W.r.fb) > 0, "the gold frame is there");
+    world_snap(&W, "anim_levelup_pulse");
+    world_frames(&W, 45); /* 0.75 s: the pulse is over, the toast is still up */
+    memcpy(at_end, W.r.fb, sizeof(at_end));
+    world_frames(&W, 10);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, frame_column_changes(at_end, W.r.fb), "and then it is still");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, frame_column_changes(at_tap, W.r.fb), "gone: the column is as before the level-up");
+}
+
+static void test_a_quest_that_gains_no_level_does_not_pulse_and_a_high_level_at_boot_does_not_either(void)
+{
+    static cydui_color before[RIG_W * RIG_H];
+    world_start(&W, TODO_PALETTE_PARCHMENT, true);
+    world_frames(&W, 40);
+    memcpy(before, W.r.fb, sizeof(before));
+    tap_first_checkbox();
+    world_frames(&W, 2);
+    TEST_ASSERT_EQUAL_INT(0, frame_column_changes(before, W.r.fb));
+    TEST_ASSERT_EQUAL_UINT16(0, W.app.pulse_seq);
+}
+
 static void test_the_settings_revision_moves_on_a_real_change_and_only_then(void)
 {
     uint32_t r0;
@@ -1055,6 +1139,10 @@ int main(void)
     RUN_TEST(test_a_completed_card_eases_to_its_done_look_and_settles_on_it_exactly);
     RUN_TEST(test_a_reopened_card_eases_back_and_quick_taps_end_on_the_last_look);
     RUN_TEST(test_cards_that_are_already_done_when_the_list_arrives_do_not_animate);
+    RUN_TEST(test_the_toast_is_opaque_then_fades_out_over_its_last_300_ms_and_leaves_nothing);
+    RUN_TEST(test_a_second_toast_is_opaque_from_its_first_frame);
+    RUN_TEST(test_a_level_up_pulses_gold_round_the_bar_and_it_is_gone_after_half_a_second);
+    RUN_TEST(test_a_quest_that_gains_no_level_does_not_pulse_and_a_high_level_at_boot_does_not_either);
     RUN_TEST(test_the_settings_revision_moves_on_a_real_change_and_only_then);
     RUN_TEST(test_saved_settings_are_in_force_from_the_first_frame);
     RUN_TEST(test_settings_that_are_not_valid_are_not_applied);

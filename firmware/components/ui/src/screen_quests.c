@@ -31,6 +31,7 @@ static void toggle_quest(todo_app *a, todo_quest *q)
         const int level = todo_level_for_xp(a->store.xp);
         if (level > level_before) {
             snprintf(text, sizeof(text), "+%ld XP  Level %d!", (long)delta, level);
+            a->pulse_seq++;
         } else {
             snprintf(text, sizeof(text), "+%ld XP", (long)delta);
         }
@@ -44,7 +45,7 @@ void screen_quests(todo_app *a, cydui_ui *ui)
     const int32_t today = app_today(a);
 
     cydui_begin_row(ui);
-    ui_xp_header(ui, a->palette, a->store.xp);
+    ui_xp_header(ui, a->palette, a->store.xp, a->pulse_seq);
     cydui_next_width(ui, 96);
     cydui_next_height(ui, 28);
     if (cydui_button(ui, "New quest")) {

@@ -48,7 +48,8 @@ void app_open_detail(todo_app *a, todo_item_kind kind, int32_t id, bool from_age
 void ui_text(cydui_ui *ui, const cydui_font *f, int x, int y, const char *s, cydui_color c);
 void ui_text_center(cydui_ui *ui, const cydui_font *f, cydui_rect box, const char *s, cydui_color c);
 bool ui_quest_card(cydui_ui *ui, todo_palette pal, const todo_quest *q, int32_t today, bool time_valid, bool *toggle, bool *open);
-void ui_xp_header(cydui_ui *ui, todo_palette pal, int32_t xp);
+/* `pulse` is 0, or the number of the level-up whose gold frame is fading round the bar */
+void ui_xp_header(cydui_ui *ui, todo_palette pal, int32_t xp, uint16_t pulse);
 void ui_wrapped(cydui_ui *ui, const cydui_font *f, cydui_color c, const char *s);
 bool ui_wax_button(cydui_ui *ui, todo_palette pal, const char *label, int w, int h);
 bool ui_month_header(cydui_ui *ui, todo_palette pal, int *y, int *m);
@@ -58,7 +59,8 @@ typedef enum { ROW_INFO, ROW_ARROWS, ROW_TAP } setting_mode;
 /* A line of the Settings tab; returns -1 / +1 for the arrows, 1 for a tap on a ROW_TAP, else 0. */
 int ui_setting_row(cydui_ui *ui, todo_palette pal, const char *label, const char *value, setting_mode mode);
 void ui_status_line(cydui_ui *ui, todo_palette pal, const char *text);
-void ui_toast(cydui_ui *ui, todo_palette pal, const char *text);
+/* `alpha` 255 is the toast as it is shown; less is it fading out */
+void ui_toast(cydui_ui *ui, todo_palette pal, const char *text, int alpha);
 
 /* settings.c: the tables behind the Settings tab */
 #define TZ_COUNT_MAX 40

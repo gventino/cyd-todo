@@ -79,6 +79,8 @@ typedef struct {
 
     char toast[TODO_TOAST_MAX];
     uint32_t toast_until;
+    uint16_t toast_seq; /* which toast it is: each one has its own fade */
+    uint16_t pulse_seq; /* moves when a level is gained; 0 until then, so that nothing pulses at boot */
 
     /* the one-time link, and the setup page */
     todo_qr qr;

@@ -86,7 +86,7 @@ bool ui_quest_card(cydui_ui *ui, todo_palette pal, const todo_quest *q, int32_t 
 }
 
 /* "Lv 2", the bar, "70 / 200": level, and how far through it. */
-void ui_xp_header(cydui_ui *ui, todo_palette pal, int32_t xp)
+void ui_xp_header(cydui_ui *ui, todo_palette pal, int32_t xp, uint16_t pulse)
 {
     const todo_colors *k = todo_colors_of(pal);
     cydui_mods m = cydui_take_mods(ui);
@@ -102,6 +102,19 @@ void ui_xp_header(cydui_ui *ui, todo_palette pal, int32_t xp)
     snprintf(buf, sizeof(buf), "Lv %d", level);
     ui_text(ui, &todo_serif_bold_16, r.x + 8, r.y + 7, buf, k->text);
     todo_paint_xp_bar(&ui->ctx, pal, rect_of(r.x + 54, r.y + 10, 100, 12), shown);
+    if (pulse) { /* a level was gained: a gold frame round the bar that fades away (it starts bright the first time it is seen) */
+        cydui_rect b = rect_of(r.x + 52, r.y + 8, 104, 16);
+        int a;
+        cydui_push_id_int(ui, pulse);
+        a = (int)cydui_animate(ui, cydui_id_str(ui, "pulse"), 160, 0, 500, CYDUI_EASE_OUT_QUAD);
+        cydui_pop_id(ui);
+        if (a > 0) {
+            cydui_draw_rect(&ui->ctx, rect_of(b.x, b.y, b.w, 2), k->gold, (uint8_t)a);
+            cydui_draw_rect(&ui->ctx, rect_of(b.x, b.y + b.h - 2, b.w, 2), k->gold, (uint8_t)a);
+            cydui_draw_rect(&ui->ctx, rect_of(b.x, b.y + 2, 2, b.h - 4), k->gold, (uint8_t)a);
+            cydui_draw_rect(&ui->ctx, rect_of(b.x + b.w - 2, b.y + 2, 2, b.h - 4), k->gold, (uint8_t)a);
+        }
+    }
     if (level >= TODO_LEVEL_MAX) {
         snprintf(buf, sizeof(buf), "MAX");
     } else {
@@ -119,16 +132,18 @@ void ui_status_line(cydui_ui *ui, todo_palette pal, const char *text)
             k->wood_light);
 }
 
-void ui_toast(cydui_ui *ui, todo_palette pal, const char *text)
+void ui_toast(cydui_ui *ui, todo_palette pal, const char *text, int alpha)
 {
     const todo_colors *k = todo_colors_of(pal);
     cydui_text_extent e = cydui_text_size(&todo_serif_bold_16, text, CYDUI_NTS, 0);
     int w = e.w + 28, h = 26;
     cydui_rect r = rect_of((SCREEN_W - w) / 2, SCREEN_H - STATUS_H - h - 6, w, h);
 
-    cydui_draw_rect(&ui->ctx, r, k->gold_dark, 255);
-    cydui_draw_rect(&ui->ctx, rect_of(r.x + 2, r.y + 2, r.w - 4, r.h - 4), k->gold, 255);
-    ui_text_center(ui, &todo_serif_bold_16, r, text, k->on_gold);
+    alpha = alpha < 0 ? 0 : (alpha > 255 ? 255 : alpha);
+    cydui_draw_rect(&ui->ctx, r, k->gold_dark, (uint8_t)alpha);
+    cydui_draw_rect(&ui->ctx, rect_of(r.x + 2, r.y + 2, r.w - 4, r.h - 4), k->gold, (uint8_t)alpha);
+    cydui_draw_text(&ui->ctx, &todo_serif_bold_16, (int16_t)(r.x + (r.w - e.w) / 2), (int16_t)(r.y + (r.h - e.h) / 2), 0, CYDUI_ALIGN_LEFT, text,
+                    CYDUI_NTS, k->on_gold, (uint8_t)alpha);
 }
 
 bool ui_wax_button(cydui_ui *ui, todo_palette pal, const char *label, int w, int h)

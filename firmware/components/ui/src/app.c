@@ -9,6 +9,7 @@
 #define POLL_QR_MS 3000u
 #define ERROR_MS 5000u
 #define TOAST_MS 2200u
+#define TOAST_FADE_MS 300u
 #define ANSWERS_PER_FRAME 4
 #define EPOCH_FIRST 946684800LL  /* 2000-01-01, the first time the server accepts */
 #define EPOCH_LAST 4102444799LL  /* the last one: 2100-01-01 is outside */
@@ -46,6 +47,7 @@ void app_toast(todo_app *a, const char *text)
 {
     todo_copy(a->toast, sizeof(a->toast), text);
     a->toast_until = a->ms + TOAST_MS;
+    a->toast_seq++;
 }
 
 bool app_submit(todo_app *a, const todo_request *req)
@@ -241,6 +243,10 @@ void todo_app_frame(todo_app *a, cydui_ui *ui)
     todo_app_status_text(a, status, sizeof(status));
     ui_status_line(ui, a->palette, status);
     if (a->toast[0] && a->ms < a->toast_until) {
-        ui_toast(ui, a->palette, a->toast);
+        /* opaque until the last moments, then it fades; each toast has a tween of its own, which starts opaque */
+        cydui_push_id_int(ui, a->toast_seq);
+        ui_toast(ui, a->palette, a->toast,
+                 (int)cydui_animate(ui, cydui_id_str(ui, "fade"), 255, a->toast_until - a->ms <= TOAST_FADE_MS ? 0 : 255, TOAST_FADE_MS, CYDUI_EASE_LINEAR));
+        cydui_pop_id(ui);
     }
 }
