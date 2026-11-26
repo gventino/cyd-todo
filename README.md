@@ -23,7 +23,7 @@ The real 320 x 240 screens, rendered by the PC program with the demo data (`firm
 | Path | What |
 |---|---|
 | `server/` | Rust: `poem`, `sqlx`, SQLite. The device API and the phone pages. |
-| `firmware/` | ESP-IDF 5.5 application, and a PC build (SDL) for development and tests. `third_party/cydui` is the library, pinned to a release tag. |
+| `firmware/` | ESP-IDF 5.5 application, and a PC build (SDL) for development and tests. `third_party/cydui` is the library, pinned to a release tag (v1.0.0-rc.2). |
 | `docs/api.md` | The contract between the board, the phone and the server, with its limits. |
 | `docs/design.md` | Screens, data, setup flow, sync, memory. |
 | `docs/threat.md` | A short threat model and the state of each control. |

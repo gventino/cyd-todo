@@ -21,12 +21,14 @@ static cydui_mem mem;
 
 typedef struct {
     uint32_t cmds;   /* commands of the busiest frame in the last ten */
+    uint32_t text;   /* bytes of the text memory of that frame, at most */
+    uint32_t state;  /* state entries in use at the end */
     uint32_t errors; /* flags raised over the scene, without the informative one */
 } measure;
 
 static measure run(const char *scene, todo_palette palette, bool worst)
 {
-    measure m = {0, 0};
+    measure m = {0, 0, 0, 0};
     uint32_t t = 0;
     int i;
 
@@ -44,10 +46,17 @@ static measure run(const char *scene, todo_palette palette, bool worst)
         todo_app_set_time(&app, SCENE_NOW + t / 1000, true);
         cydui_ui_begin(&ui, 0);
         todo_app_frame(&app, &ui);
-        if (i >= 30 && cydui_cmd_count(&ui.ctx) > m.cmds) {
-            m.cmds = cydui_cmd_count(&ui.ctx);
-        }
         cydui_ui_end(&ui);
+        if (i == 29) {
+            cydui_ui_stats_reset(&ui); /* the peaks of the last ten frames, when the screen has settled */
+        }
+    }
+    {
+        cydui_ui_stats st;
+        cydui_ui_stats_get(&ui, &st);
+        m.cmds = st.cmds_peak;
+        m.text = st.text_peak;
+        m.state = st.state_used;
     }
     m.errors = cydui_ui_errors(&ui) & ~(uint32_t)CYDUI_ERR_TEXT_TRUNCATED;
     return m;
@@ -55,7 +64,7 @@ static measure run(const char *scene, todo_palette palette, bool worst)
 
 static void test_every_scene_fits_the_board_with_demo_data_and_with_the_worst_case(void)
 {
-    uint32_t most = 0;
+    uint32_t most = 0, most_text = 0, most_state = 0;
     const char *most_scene = "";
     int s, p, w;
 
@@ -64,10 +73,18 @@ static void test_every_scene_fits_the_board_with_demo_data_and_with_the_worst_ca
             for (w = 0; w < 2; w++) {
                 char msg[96];
                 measure m = run(scene_name(s), (todo_palette)p, w == 1);
-                snprintf(msg, sizeof(msg), "%s, palette %d, %s: %u commands, errors 0x%x", scene_name(s), p, w ? "worst case" : "demo", (unsigned)m.cmds,
-                         (unsigned)m.errors);
-                TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, m.errors, msg);
+                snprintf(msg, sizeof(msg), "%s, palette %d, %s: %u commands, %u text bytes, %u state entries, errors 0x%x", scene_name(s), p,
+                         w ? "worst case" : "demo", (unsigned)m.cmds, (unsigned)m.text, (unsigned)m.state, (unsigned)m.errors);
+                TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, m.errors, msg); /* no flag, and so no full state table either */
                 TEST_ASSERT_TRUE_MESSAGE(m.cmds > 0 && m.cmds <= 320, msg);
+                TEST_ASSERT_TRUE_MESSAGE(m.text > 0 && m.text <= 1536, msg);
+                TEST_ASSERT_TRUE_MESSAGE(m.state <= 64, msg);
+                if (m.text > most_text) {
+                    most_text = m.text;
+                }
+                if (m.state > most_state) {
+                    most_state = m.state;
+                }
                 if (m.cmds > most) {
                     most = m.cmds;
                     most_scene = scene_name(s);
@@ -75,7 +92,8 @@ static void test_every_scene_fits_the_board_with_demo_data_and_with_the_worst_ca
             }
         }
     }
-    printf("budget: the busiest frame is %u of 320 commands (%s)\n", (unsigned)most, most_scene);
+    printf("budget: the busiest frame is %u of 320 commands (%s), %u of 1536 text bytes, %u of 64 state entries\n", (unsigned)most, most_scene,
+           (unsigned)most_text, (unsigned)most_state);
 }
 
 static void test_the_worst_case_data_really_fills_the_caches(void)

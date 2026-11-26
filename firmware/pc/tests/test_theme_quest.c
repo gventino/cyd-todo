@@ -281,25 +281,21 @@ static void test_ellipsis_fits_and_never_cuts_a_character(void)
     const char *titles[] = {"A very long quest title that does not fit", "Ação e emoção \xC3\xA9\xC3\xA9\xC3\xA9\xC3\xA9\xC3\xA9\xC3\xA9\xC3\xA9\xC3\xA9",
                             "\xE2\x82\xAC\xE2\x82\xAC\xE2\x82\xAC\xE2\x82\xAC\xE2\x82\xAC\xE2\x82\xAC\xE2\x82\xAC\xE2\x82\xAC", "short", ""};
     size_t t;
-    int w;
+    int w, dots = cydui_text_size(f, "\xE2\x80\xA6", 3, 0).w;
     for (t = 0; t < sizeof(titles) / sizeof(titles[0]); t++) {
         for (w = 0; w < 200; w += 3) {
             bool cut;
-            size_t n = todo_fit_ellipsis(f, titles[t], w, &cut);
             char buf[300];
-            int shown;
-            memcpy(buf, titles[t], n);
-            buf[n] = '\0';
-            if (cut) {
-                strcat(buf, "\xE2\x80\xA6");
+            size_t n = cydui_text_ellipsize(f, titles[t], CYDUI_NTS, (int16_t)w, buf, sizeof(buf), &cut);
+            TEST_ASSERT_EQUAL_size_t(strlen(buf), n);
+            if (w >= dots || !cut) {
+                TEST_ASSERT_TRUE_MESSAGE(cydui_text_size(f, buf, n, 0).w <= w || n == 0, titles[t]);
             }
-            shown = cydui_text_size(f, buf, strlen(buf), 0).w;
-            if (cut || w >= cydui_text_size(f, titles[t], strlen(titles[t]), 0).w) {
-                TEST_ASSERT_TRUE_MESSAGE(shown <= w || n == 0, titles[t]);
+            if (cut) { /* what is kept is a start of the title, cut between characters, and then the ellipsis */
+                TEST_ASSERT_TRUE(n >= 3 && memcmp(buf + n - 3, "\xE2\x80\xA6", 3) == 0);
+                TEST_ASSERT_EQUAL_INT(0, strncmp(buf, titles[t], n - 3));
+                TEST_ASSERT_TRUE(((unsigned char)titles[t][n - 3] & 0xC0) != 0x80);
             }
-            /* a character is never split: the next byte after the cut is a start byte (or the end) */
-            TEST_ASSERT_TRUE(((unsigned char)titles[t][n] & 0xC0) != 0x80);
-            TEST_ASSERT_TRUE(n <= strlen(titles[t]));
         }
     }
 }
@@ -307,11 +303,13 @@ static void test_ellipsis_fits_and_never_cuts_a_character(void)
 static void test_a_title_that_fits_is_drawn_whole_and_one_that_does_not_ends_in_an_ellipsis(void)
 {
     bool cut;
+    char buf[64];
     const cydui_font *f = &todo_serif_16;
     int full = cydui_text_size(f, "Slay the inbox", CYDUI_NTS, 0).w;
-    TEST_ASSERT_EQUAL_UINT(14, todo_fit_ellipsis(f, "Slay the inbox", full, &cut));
+    TEST_ASSERT_EQUAL_UINT(14, cydui_text_ellipsize(f, "Slay the inbox", CYDUI_NTS, (int16_t)full, buf, sizeof(buf), &cut));
     TEST_ASSERT_FALSE(cut);
-    TEST_ASSERT_TRUE(todo_fit_ellipsis(f, "Slay the inbox", full - 1, &cut) < 14);
+    TEST_ASSERT_EQUAL_STRING("Slay the inbox", buf);
+    TEST_ASSERT_TRUE(cydui_text_ellipsize(f, "Slay the inbox", CYDUI_NTS, (int16_t)(full - 1), buf, sizeof(buf), &cut) < 14 + 3);
     TEST_ASSERT_TRUE(cut);
 }
 
@@ -348,12 +346,11 @@ static void test_the_xp_bar_width_is_exact_and_clamped(void)
 
 static void test_a_very_long_text_is_cut_to_the_contract_even_when_the_width_is_huge(void)
 {
-    char big[281];
-    bool cut;
+    char big[281], buf[260];
     size_t n;
     memset(big, 'a', sizeof(big) - 1);
     big[sizeof(big) - 1] = '\0';
-    n = todo_fit_ellipsis(&todo_serif_12, big, 30000, &cut);
+    n = cydui_text_ellipsize(&todo_serif_12, big, CYDUI_NTS, 30000, buf, sizeof(buf), NULL);
     TEST_ASSERT_TRUE(n <= 256);
 }
 

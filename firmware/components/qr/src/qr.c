@@ -12,22 +12,15 @@ static void clear(todo_qr *q)
 
 static void render(todo_qr *q)
 {
-    const int px = (q->size + 2 * TODO_QR_QUIET) * TODO_QR_MODULE_PX;
-    int row, col, dy;
+    const size_t row_bytes = ((size_t)q->size + 7u) / 8u;
+    int row, col;
 
-    q->px = px;
-    memset(q->mask, 0, (size_t)px * (size_t)px / 2);
+    q->px = (q->size + 2 * TODO_QR_QUIET) * TODO_QR_MODULE_PX;
+    memset(q->mask, 0, row_bytes * (size_t)q->size);
     for (row = 0; row < q->size; row++) {
         for (col = 0; col < q->size; col++) {
-            if (!qrcodegen_getModule(q->modules, col, row)) {
-                continue;
-            }
-            for (dy = 0; dy < TODO_QR_MODULE_PX; dy++) {
-                /* 4 pixels = 2 bytes, and the module starts on an even pixel */
-                size_t at = ((size_t)((row + TODO_QR_QUIET) * TODO_QR_MODULE_PX + dy) * (size_t)px +
-                             (size_t)((col + TODO_QR_QUIET) * TODO_QR_MODULE_PX)) / 2;
-                q->mask[at] = 0xFF;
-                q->mask[at + 1] = 0xFF;
+            if (qrcodegen_getModule(q->modules, col, row)) {
+                q->mask[(size_t)row * row_bytes + (size_t)(col / 8)] |= (uint8_t)(0x80u >> (col % 8));
             }
         }
     }
@@ -77,7 +70,8 @@ void todo_qr_draw(cydui_ui *ui, const todo_qr *q, int x, int y)
     }
     r = (cydui_rect){(int16_t)x, (int16_t)y, (int16_t)q->px, (int16_t)q->px};
     cydui_draw_rect(&ui->ctx, r, TODO_QR_PAPER, 255);
-    cydui_draw_bitmap(&ui->ctx, r, q->mask, (size_t)q->px * (size_t)q->px / 2, CYDUI_BITMAP_A4, TODO_QR_INK, 255);
+    cydui_draw_bitmap_a1(&ui->ctx, (int16_t)(x + TODO_QR_QUIET * TODO_QR_MODULE_PX), (int16_t)(y + TODO_QR_QUIET * TODO_QR_MODULE_PX), (int16_t)q->size,
+                         (int16_t)q->size, TODO_QR_MODULE_PX, q->mask, ((size_t)q->size + 7u) / 8u * (size_t)q->size, TODO_QR_INK, 255);
 }
 
 bool todo_qr_module(const todo_qr *q, int col, int row)

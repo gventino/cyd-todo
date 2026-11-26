@@ -62,7 +62,5 @@ void todo_draw_stars(cydui_ctx *ctx, int x, int y, int n, int of, cydui_color co
  * so that the result fits. Returns the width drawn.
  */
 int todo_draw_text_ellipsis(cydui_ctx *ctx, const cydui_font *font, int x, int y, int max_w, const char *s, cydui_color color);
-/* The bytes of `s` that fit `max_w` with "…" after them (the whole length when all of it fits). Pure, for tests. */
-size_t todo_fit_ellipsis(const cydui_font *font, const char *s, int max_w, bool *cut);
 
 #endif /* TODO_THEME_QUEST_H */

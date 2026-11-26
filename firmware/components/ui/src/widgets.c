@@ -303,19 +303,12 @@ bool ui_row_button(cydui_ui *ui, todo_palette pal, const char *title, const char
     return rc.clicked;
 }
 
-/* Text that wraps at the width the container has, in any font and color (the library's own label is in the theme's font). */
+/* Text that wraps at the width the container has, in any font and color: the library's wrapped label with its modifiers. */
 void ui_wrapped(cydui_ui *ui, const cydui_font *f, cydui_color c, const char *s)
 {
-    cydui_mods m = cydui_take_mods(ui);
-    int w = cydui_layout_avail(ui).w;
-    cydui_text_extent e = cydui_text_size(f, s, CYDUI_NTS, (int16_t)w);
-    cydui_rect r;
-
-    if (!cydui_widget_begin(ui)) {
-        return;
-    }
-    r = cydui_alloc(ui, &m, w, e.h);
-    cydui_draw_text(&ui->ctx, f, r.x, r.y, (int16_t)w, CYDUI_ALIGN_LEFT, s, CYDUI_NTS, c, 255);
+    cydui_next_font(ui, f);
+    cydui_next_color(ui, c);
+    cydui_label_wrapped(ui, s);
 }
 
 int ui_setting_row(cydui_ui *ui, todo_palette pal, const char *label, const char *value, setting_mode mode)

@@ -15,10 +15,16 @@ void tearDown(void) {}
 static todo_qr Q;
 static rig R;
 
+/* what the screen draws at pixel (x, y) of the code, quiet zone included: 15 for ink, 0 for paper (the mask is one bit per module at scale 4) */
 static int coverage(const todo_qr *q, int x, int y)
 {
-    uint8_t b = q->mask[((size_t)y * (size_t)q->px + (size_t)x) / 2];
-    return (x & 1) ? b & 15 : b >> 4;
+    int col = x / TODO_QR_MODULE_PX - TODO_QR_QUIET, row = y / TODO_QR_MODULE_PX - TODO_QR_QUIET;
+    size_t row_bytes = ((size_t)q->size + 7u) / 8u;
+
+    if (col < 0 || row < 0 || col >= q->size || row >= q->size) {
+        return 0;
+    }
+    return (q->mask[(size_t)row * row_bytes + (size_t)(col / 8)] >> (7 - col % 8)) & 1 ? 15 : 0;
 }
 
 static void text_of(char *buf, int n)

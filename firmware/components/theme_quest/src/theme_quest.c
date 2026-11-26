@@ -28,11 +28,17 @@ const todo_colors *todo_colors_of(todo_palette p)
     return &COLORS[p >= 0 && p < TODO_PALETTE_COUNT ? p : TODO_PALETTE_PARCHMENT];
 }
 
-/* The palette of the theme being painted: the theme keeps its own copy of the colors it uses, so painters find the
- * set by comparing the name. */
+/* The colors of the theme being painted: the theme carries them in `user` (the library never reads it), so a painter finds
+ * the set it was built from without a lookup by name. */
+static const todo_colors *colors_of_theme(const cydui_theme *t)
+{
+    return t->user ? (const todo_colors *)t->user : todo_colors_of(TODO_PALETTE_PARCHMENT);
+}
+
+/* ... and which palette that is, for the helpers that take a palette (the pointer says it, no comparing of names). */
 static todo_palette palette_of(const cydui_theme *t)
 {
-    return t->name && strcmp(t->name, "quest-candlelight") == 0 ? TODO_PALETTE_CANDLELIGHT : TODO_PALETTE_PARCHMENT;
+    return colors_of_theme(t) == todo_colors_of(TODO_PALETTE_CANDLELIGHT) ? TODO_PALETTE_CANDLELIGHT : TODO_PALETTE_PARCHMENT;
 }
 
 /* ---- drawing helpers ---- */
@@ -76,7 +82,7 @@ static void entry(cydui_theme *t, cydui_widget_kind k, int sel, cydui_widget_sta
 /* A button of gold: a dark edge, a light line along the top while it stands out, the face with the label. */
 static void paint_button(cydui_ui *ui, const cydui_theme *t, const cydui_paint_info *p)
 {
-    const todo_colors *k = todo_colors_of(palette_of(t));
+    const todo_colors *k = colors_of_theme(t);
     const bool down = p->state == CYDUI_STATE_PRESSED || cydui_paint_amount(p) > CYDUI_ANIM_ONE / 2;
     cydui_paint_info face = *p;
 
@@ -96,7 +102,7 @@ static void paint_button(cydui_ui *ui, const cydui_theme *t, const cydui_paint_i
 /* A tab: wood, and the active one is the page itself with a gold bar on top. */
 static void paint_tab(cydui_ui *ui, const cydui_theme *t, const cydui_paint_info *p)
 {
-    const todo_colors *k = todo_colors_of(palette_of(t));
+    const todo_colors *k = colors_of_theme(t);
     cydui_paint_info face = *p;
     const bool active = cydui_paint_amount(p) > CYDUI_ANIM_ONE / 2;
 
@@ -116,7 +122,7 @@ static void paint_tab(cydui_ui *ui, const cydui_theme *t, const cydui_paint_info
 /* A panel or a popup: a double border (wood, then a gold line) round the page. */
 static void paint_page(cydui_ui *ui, const cydui_theme *t, const cydui_paint_info *p)
 {
-    const todo_colors *k = todo_colors_of(palette_of(t));
+    const todo_colors *k = colors_of_theme(t);
     cydui_paint_info face = *p;
 
     boxed(&ui->ctx, p->rect, 2, k->wood, k->gold_dark);
@@ -126,7 +132,7 @@ static void paint_page(cydui_ui *ui, const cydui_theme *t, const cydui_paint_inf
 
 static void paint_checkbox(cydui_ui *ui, const cydui_theme *t, const cydui_paint_info *p)
 {
-    const todo_colors *k = todo_colors_of(palette_of(t));
+    const todo_colors *k = colors_of_theme(t);
     cydui_paint_info face = *p;
 
     fill(&ui->ctx, p->rect, k->wood_light);
@@ -144,7 +150,7 @@ static void paint_progress(cydui_ui *ui, const cydui_theme *t, const cydui_paint
 
 static void paint_scrollbar(cydui_ui *ui, const cydui_theme *t, const cydui_paint_info *p)
 {
-    const todo_colors *k = todo_colors_of(palette_of(t));
+    const todo_colors *k = colors_of_theme(t);
     int64_t span = p->max > 0 ? p->max : 0, pos = p->value < 0 ? 0 : p->value, total = span + p->aux.h;
     cydui_rect thumb = p->rect;
 
@@ -170,6 +176,7 @@ void todo_theme_quest_init(cydui_theme *t, todo_palette p)
 
     memset(t, 0, sizeof(*t));
     t->name = p == TODO_PALETTE_CANDLELIGHT ? "quest-candlelight" : "quest-parchment";
+    t->user = k;
     s = &t->style;
     s->bg = k->bg;
     s->panel = k->page;
@@ -292,72 +299,11 @@ void todo_draw_stars(cydui_ctx *ctx, int x, int y, int n, int of, cydui_color co
 
 /* ---- text with an ellipsis ---- */
 
-static int width_of(const cydui_font *f, const char *s, size_t len)
-{
-    return len ? cydui_text_size(f, s, len, 0).w : 0;
-}
-
-/* The length of the character that starts at s[i]: 1 for a malformed byte, so the walk always advances. */
-static size_t char_len(const char *s, size_t i, size_t len)
-{
-    unsigned char c = (unsigned char)s[i];
-    size_t n = c < 0x80 ? 1 : (c >= 0xF0 ? 4 : (c >= 0xE0 ? 3 : (c >= 0xC0 ? 2 : 1)));
-
-    return i + n <= len ? n : len - i;
-}
-
-size_t todo_fit_ellipsis(const cydui_font *font, const char *s, int max_w, bool *cut)
-{
-    static const char DOTS[] = "\xE2\x80\xA6";
-    char buf[TODO_TEXT_MAX + 4];
-    size_t len = strlen(s), i = 0, best = 0;
-    int dots = width_of(font, DOTS, 3);
-
-    if (len > TODO_TEXT_MAX) {
-        len = TODO_TEXT_MAX;
-    }
-    *cut = false;
-    if (width_of(font, s, len) <= max_w) {
-        return len;
-    }
-    *cut = true;
-    while (i < len) { /* a quick estimate: the widths of the pieces added up */
-        size_t n = char_len(s, i, len);
-        if (width_of(font, s, i + n) + dots > max_w) {
-            break;
-        }
-        i += n;
-        best = i;
-    }
-    /* the whole is not always the sum of its parts (the font rounds the advance): check the real thing, back off */
-    while (best > 0) {
-        size_t j = 0, prev = 0;
-        memcpy(buf, s, best);
-        memcpy(buf + best, DOTS, 3);
-        if (width_of(font, buf, best + 3) <= max_w) {
-            break;
-        }
-        while (j < best) { /* the start of the last character */
-            prev = j;
-            j += char_len(s, j, best);
-        }
-        best = prev;
-    }
-    return best;
-}
-
 int todo_draw_text_ellipsis(cydui_ctx *ctx, const cydui_font *font, int x, int y, int max_w, const char *s, cydui_color color)
 {
     char buf[TODO_TEXT_MAX + 4];
-    bool cut;
-    size_t n = todo_fit_ellipsis(font, s, max_w, &cut);
+    size_t n = cydui_text_ellipsize(font, s, CYDUI_NTS, (int16_t)(max_w > 32767 ? 32767 : max_w), buf, sizeof(buf), NULL);
 
-    memcpy(buf, s, n);
-    if (cut) {
-        memcpy(buf + n, "\xE2\x80\xA6", 3);
-        n += 3;
-    }
-    buf[n] = '\0';
     cydui_draw_text(ctx, font, (int16_t)x, (int16_t)y, 0, CYDUI_ALIGN_LEFT, buf, n, color, 255);
-    return width_of(font, buf, n);
+    return n ? cydui_text_size(font, buf, n, 0).w : 0;
 }

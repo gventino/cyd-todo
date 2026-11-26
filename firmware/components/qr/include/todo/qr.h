@@ -3,11 +3,12 @@
 
 /*
  * QR codes for the screen. The encoder is Nayuki's (vendor/); this wraps it: error correction medium (raised when
- * there is room), versions 1..5, drawn as one paper rectangle and one A4 bitmap with 4 px modules and a 4 module quiet
+ * there is room), versions 1..5, drawn as one paper rectangle and one 1-bit bitmap at scale 4 (CYDUI_BITMAP_A1) with a 4 module quiet
  * zone. Always dark on light, in every palette: many scanners do not read an inverted code.
  *
- * The caller owns the todo_qr (about 16 KB). The library hashes a bitmap by its pointer, so a new code in the same
- * buffer must be announced with cydui_invalidate(): todo_qr_set() does it.
+ * The caller owns the todo_qr (under 400 bytes: the mask is one bit per module, drawn by the library at a scale of 4
+ * pixels). The library hashes a bitmap by its pointer, so a new code in the same buffer must be announced with
+ * cydui_invalidate(): todo_qr_set() does it.
  */
 
 #include <stdbool.h>
@@ -21,14 +22,14 @@
 #define TODO_QR_QUIET 4 /* modules of empty margin on every side */
 #define TODO_QR_MAX_MODULES (TODO_QR_MAX_VERSION * 4 + 17)
 #define TODO_QR_MAX_PX ((TODO_QR_MAX_MODULES + 2 * TODO_QR_QUIET) * TODO_QR_MODULE_PX)
-#define TODO_QR_MASK_BYTES (TODO_QR_MAX_PX * TODO_QR_MAX_PX / 2) /* A4: two pixels per byte */
+#define TODO_QR_MASK_BYTES (((TODO_QR_MAX_MODULES + 7) / 8) * TODO_QR_MAX_MODULES) /* A1: a bit per module, rows padded to a byte */
 #define TODO_QR_MATRIX_BYTES (((TODO_QR_MAX_MODULES * TODO_QR_MAX_MODULES) + 7) / 8 + 1)
 
 #define TODO_QR_PAPER CYDUI_RGB(0xF8, 0xEF, 0xD3)
 #define TODO_QR_INK CYDUI_RGB(0x1A, 0x12, 0x0A)
 
 typedef struct {
-    uint8_t mask[TODO_QR_MASK_BYTES]; /* 4-bit coverage, high nibble first: 15 for a dark module, 0 elsewhere */
+    uint8_t mask[TODO_QR_MASK_BYTES]; /* 1 bit per module, most significant bit first, rows padded to a byte: 1 for a dark module */
     uint8_t modules[TODO_QR_MATRIX_BYTES]; /* the encoder's own matrix, kept for the tests */
     int size;                         /* modules per side, 0 while there is no code */
     int px;                           /* pixels per side, with the quiet zone */
