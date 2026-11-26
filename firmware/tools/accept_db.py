@@ -67,7 +67,9 @@ def main():
     now = state()
     new_q = [v["title"] for k, v in now["quests"].items() if k not in before["quests"]]
     new_e = [v["title"] for k, v in now["events"].items() if k not in before["events"]]
-    done = [v["title"] for k, v in now["quests"].items() if k in before["quests"] and before["quests"][k]["state"] != v["state"]]
+    # a quest that changed state: one that was there and now differs, or one written after the snapshot that is already done
+    done = [v["title"] for k, v in now["quests"].items()
+            if (k in before["quests"] and before["quests"][k]["state"] != v["state"]) or (k not in before["quests"] and v["state"] == "done")]
     lines = log_lines(before["log_offset"])
     count = lambda *needles: sum(1 for l in lines if all(n in l for n in needles))
     print("new quests:        %s" % (new_q or "none"))

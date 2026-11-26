@@ -36,7 +36,7 @@ git clone --recurse-submodules https://github.com/gventino/cyd-todo.git
 ```
 
 ## Status of the plan
-A0 repository and contract (done) - A1 server device API (done, see `server/README.md`) - A2 server phone pages (done) - A3 model and UI on the PC (done: model, repository, theme, QR, every screen, scripted runs and about 90 golden pictures) - A4 Wi-Fi setup by QR (done and accepted on the board with a phone: the same UI as the PC, 37 of 37 scene hashes, access point, captive portal, no QR once connected) - A5 network and sync (the board syncs with the server: SNTP time, lists, polling, every injected fault survived; the phone acceptance is being re-done with the server's database as the judge) - A6 polish and hardening (A6.0 under way) - A7 TLS.
+A0 repository and contract (done) - A1 server device API (done, see `server/README.md`) - A2 server phone pages (done) - A3 model and UI on the PC (done: model, repository, theme, QR, every screen, scripted runs and about 90 golden pictures) - A4 Wi-Fi setup by QR (done and accepted on the board with a phone: the same UI as the PC, 37 of 37 scene hashes, access point, captive portal, no QR once connected) - A5 network and sync (the board syncs with the server: SNTP time, lists, polling, every injected fault survived; accepted with a phone, judged by the server's database) - A6 polish and hardening (A6.0 done; persisted settings, backlight, animations, fuzz and soak next) - A7 TLS.
 
 ## License
 MIT, see `LICENSE`. Third party: the QR encoder of Project Nayuki (MIT, `firmware/components/qr/vendor/`) and Liberation Serif (SIL OFL). The serif font that will be bundled is under the SIL OFL (its license is in `firmware/components/theme_quest/fonts/`).
