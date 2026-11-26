@@ -59,7 +59,7 @@ Runs as an unprivileged user, a single SQLite file, migrations in code, backups 
 | CT-18 Secrets in an encrypted NVS | **Later** (A7): the token and Wi-Fi password are in a plain NVS during development. |
 | CT-19 Secure Boot | Optional, release only; not planned for v0.1. |
 | CT-20 Logs never print user text or tokens | **Server side done (A1):** the access log has method, a printable path, status and time only (tested with markers), errors never echo the client, `server/scripts/audit.sh` checks what may be logged. Firmware side at A5. |
-| CT-21 Backlight timeout and a privacy mode | A6. |
+| CT-21 Backlight timeout and a privacy mode | **Timeout done (A6.2):** after the owner's timeout the panel dims to 10 % and a touch wakes it (evidence: the `TODO_BACKLIGHT` log lines at 60 s and at 30 s). **Privacy mode: not done, by choice:** dimming does not hide the content, so anyone who touches the screen sees the quests; accepted for a device on the owner's own desk. A corrupted or hostile settings record in the flash is refused whole and the defaults are used (every flipped bit tested). **Dev-only things:** the baked server and token of `sdkconfig.local` (git-ignored; `ci.sh` refuses `CONFIG_TODO_DEV_` in a tracked file) and a firewall rule on the developer's computer are for local development and must not exist in a release. **Residual risks, from the skipped A6.4:** no whole-application fuzz, no watchdog or restart policy beyond the defaults, the longest board run is 11 minutes. |
 | CT-22 Destructive actions need a confirmation | Done in the design: delete and Change Wi-Fi ask again (A3). |
 
 ## Accepted residual risks
