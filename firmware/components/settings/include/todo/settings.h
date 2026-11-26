@@ -54,4 +54,21 @@ void todo_debounce_init(todo_debounce *d);
 void todo_debounce_change(todo_debounce *d, uint32_t now_ms);
 bool todo_debounce_due(todo_debounce *d, uint32_t now_ms, uint32_t delay_ms);
 
+/*
+ * The backlight policy: full brightness while the owner is around, dimmed to TODO_DIM_PERCENT after the timeout of the
+ * Settings tab, back to full on the next touch. The brightness is the board's to set; this only says which one it should be.
+ */
+#define TODO_DIM_PERCENT 10
+
+typedef struct {
+    uint32_t last; /* milliseconds of the last touch (the boot counts as one) */
+} todo_idle;
+
+void todo_idle_init(todo_idle *i, uint32_t now_ms);
+void todo_idle_touch(todo_idle *i, uint32_t now_ms);
+/* 100 or TODO_DIM_PERCENT. The timeout is judged on the same last touch, so a changed setting takes effect at once. */
+int todo_idle_level(const todo_idle *i, uint32_t now_ms, int backlight_index);
+/* The timeout of a backlight index in milliseconds; 0 for "never". */
+uint32_t todo_idle_timeout_ms(int backlight_index);
+
 #endif /* TODO_SETTINGS_H */

@@ -54,6 +54,19 @@ static cydui_backend real_be, be;
 static bool virt_clock;
 static uint32_t virt_now;
 
+static todo_idle idle;
+
+/* Every touch is noted for the backlight, and passed on untouched: the touch that wakes the screen is also a tap. */
+static bool poll_event_noting_touch(void *user, cydui_event *ev)
+{
+    bool got = real_be.poll_event(real_be.user, ev);
+
+    if (got && ev->type == CYDUI_EVENT_DOWN) {
+        todo_idle_touch(&idle, real_be.now_ms(real_be.user));
+    }
+    return got;
+}
+
 static uint32_t clock_ms(void *user)
 {
     (void)user;
@@ -236,6 +249,21 @@ static void save_settings_when_they_stop_changing(uint32_t now)
     }
 }
 
+/* Dim after the owner's timeout, full again on a touch; the panel is told only when the level changes. */
+static void follow_the_backlight(cydui_esp32 *d)
+{
+    static int level = 100;
+    uint32_t now = real_be.now_ms(real_be.user);
+    int want = todo_idle_level(&idle, now, app->backlight_index);
+
+    if (want != level) {
+        printf("TODO_BACKLIGHT %d->%d (%s, timeout %" PRIu32 " s)\n", level, want, want < level ? "idle" : "touch or setting",
+               todo_idle_timeout_ms(app->backlight_index) / 1000);
+        cydui_esp32_set_backlight(d, want);
+        level = want;
+    }
+}
+
 static void calibrate(void)
 {
     esp_err_t e = cydui_esp32_calibrate(&dev, &ui.ctx, &todo_serif_16, 60000);
@@ -265,6 +293,8 @@ void app_main(void)
     real_be = *cydui_esp32_backend(&dev);
     be = real_be;
     be.now_ms = clock_ms;
+    be.poll_event = poll_event_noting_touch;
+    todo_idle_init(&idle, real_be.now_ms(real_be.user));
     if (!alloc_app()) {
         return;
     }
@@ -323,6 +353,7 @@ void app_main(void)
             todo_app_set_time(app, valid ? epoch : 0, valid);
         }
         sync_net();
+        follow_the_backlight(&dev);
         save_settings_when_they_stop_changing((uint32_t)(esp_timer_get_time() / 1000));
         cydui_ui_begin(&ui, 0);
         todo_app_frame(app, &ui);
