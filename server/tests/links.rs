@@ -247,7 +247,7 @@ async fn every_phone_side_answer_is_hardened_and_the_device_side_does_not_get_a_
         let h = &r.headers;
         assert_eq!(h.get("content-security-policy").unwrap().to_str().unwrap(), csp, "{}", r.status);
         assert_eq!(h.get("x-content-type-options").unwrap(), "nosniff");
-        assert_eq!(h.get("referrer-policy").unwrap(), "no-referrer");
+        assert_eq!(h.get("referrer-policy").unwrap(), "same-origin");
         assert_eq!(h.get("cache-control").unwrap(), "no-store");
         if r.status != StatusCode::SEE_OTHER {
             assert!(h.get("content-type").unwrap().to_str().unwrap().starts_with("text/html"));

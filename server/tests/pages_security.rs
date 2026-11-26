@@ -332,3 +332,22 @@ async fn the_code_and_the_session_never_appear_in_any_page() {
     }
     assert!(!r.text().contains(&code));
 }
+
+/// What a real phone sends. A browser posting a form under `Referrer-Policy: no-referrer` sends `Origin: null`, which this
+/// server must (and does) refuse: so the pages must ask for `same-origin`, under which the browser sends the real origin.
+#[tokio::test]
+async fn a_form_posted_with_the_browsers_real_origin_works_and_a_null_origin_does_not() {
+    let e = env().await;
+    let v = e.visit("quest").await;
+    let body = format!("csrf={}&title=From+a+phone&notes=&difficulty=2&due=", v.csrf);
+    let headers_null = [("Cookie", v.cookie.as_str()), ("Origin", "null")];
+    let r = e.raw("POST", "/app/quests", &headers_null, Some(&body)).await;
+    assert_eq!(r.status, StatusCode::FORBIDDEN, "{}", r.text());
+    let headers_ok = [("Cookie", v.cookie.as_str()), ("Origin", common::PUBLIC_URL)];
+    let r = e.raw("POST", "/app/quests", &headers_ok, Some(&body)).await;
+    assert_eq!(r.status, StatusCode::SEE_OTHER, "{}", r.text());
+    // and the pages ask the browser to send the origin: same-origin, in the header and in the page
+    let page = e.page(&v, "/app/quests/new").await;
+    assert_eq!(page.headers.get("referrer-policy").unwrap(), "same-origin");
+    assert!(page.text().contains("name=\"referrer\" content=\"same-origin\""), "{}", page.text());
+}

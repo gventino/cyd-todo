@@ -117,7 +117,7 @@ pub fn harden(mut resp: Response, state: &AppState) -> Response {
     }
     h.insert("Cache-Control", "no-store".parse().expect("static header"));
     h.insert("X-Content-Type-Options", "nosniff".parse().expect("static header"));
-    h.insert("Referrer-Policy", "no-referrer".parse().expect("static header"));
+    h.insert("Referrer-Policy", "same-origin".parse().expect("static header"));
     resp
 }
 

@@ -76,7 +76,7 @@ An event: `{"id": 3, "title": "Dentist", "description": "Bring the X-rays", "sta
 `GET /health` -> `{"ok": true}`. No token. The only call that needs none.
 
 ## Phone pages (HTML)
-Server-rendered, **no JavaScript at all**, one inlined stylesheet, made for a phone in portrait. English only. Every answer of this side (pages, errors and redirects) carries `Content-Security-Policy: default-src 'none'; style-src 'sha256-<hash of the stylesheet>'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and `Cache-Control: no-store`. The phone side never accepts the Bearer token and the device side never accepts a session.
+Server-rendered, **no JavaScript at all**, one inlined stylesheet, made for a phone in portrait. English only. Every answer of this side (pages, errors and redirects) carries `Content-Security-Policy: default-src 'none'; style-src 'sha256-<hash of the stylesheet>'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin` and `Cache-Control: no-store`. The phone side never accepts the Bearer token and the device side never accepts a session.
 
 | Route | What |
 |---|---|

@@ -170,7 +170,7 @@ pub fn page(title: &str, body: Html) -> String {
     let head = Html::join([
         Html::lit("<meta charset=\"utf-8\">"),
         Html::lit("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"),
-        Html::lit("<meta name=\"referrer\" content=\"no-referrer\">"),
+        Html::lit("<meta name=\"referrer\" content=\"same-origin\">"),
         Html::tag("title", &[], Html::text(title)),
         Html::tag("style", &[], Html::lit(CSS)),
     ]);
